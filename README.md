@@ -33,3 +33,25 @@ Recommended first test files after generation:
 - `he_corpus/ckks_normal/ckks_normal_000008.csv`
 - `he_corpus/depth/exact_depth_000256.csv`
 - `he_corpus/depth/ckks_depth_000256.csv`
+
+## Current C++ Test Suite
+
+The first C++ benchmark target is `seal_bfv_exact`.
+
+It validates Microsoft SEAL BFV batched exact arithmetic against the generated exact corpus:
+
+- add
+- subtract
+- multiply
+- square
+- negate
+
+The benchmark reads signed integer reference values from `he_corpus/exact/*.csv`, decrypts each result, and compares slots with centered modulo normalization. Timing is printed per operation, but this first target is mainly a correctness baseline before adding OpenFHE and larger timing runs.
+
+Build and run:
+
+```bash
+cmake -S cpp -B cpp/build
+cmake --build cpp/build --target seal_bfv_exact
+./cpp/build/seal_bfv_exact he_corpus/exact/exact_safe_000008.csv
+```
