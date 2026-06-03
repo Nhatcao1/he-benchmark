@@ -10,7 +10,7 @@ option(HE_BENCHMARK_USE_SIBLING_SEAL "Build Microsoft SEAL from ../SEAL" ON)
 option(HE_BENCHMARK_BUILD_OPENFHE "Build OpenFHE benchmark targets" OFF)
 option(HE_BENCHMARK_LINK_OPENFHE_STATIC "Link OpenFHE static libraries" OFF)
 
-# Header-only helpers shared by SEAL and future OpenFHE benchmark executables.
+# Header-only helpers shared by SEAL and OpenFHE benchmark executables.
 add_library(he_benchmark_common INTERFACE)
 target_include_directories(he_benchmark_common INTERFACE
     "${CMAKE_CURRENT_SOURCE_DIR}/common"
@@ -34,6 +34,8 @@ add_executable(seal_bfv_exact seal/seal_bfv_exact.cpp)
 target_link_libraries(seal_bfv_exact PRIVATE he_benchmark_common SEAL::seal)
 
 if(HE_BENCHMARK_BUILD_OPENFHE)
+    # OpenFHE is optional because local machines may only have the SEAL sibling
+    # checkout. Server builds enable this after installing OpenFHE.
     find_package(OpenFHE CONFIG REQUIRED)
     separate_arguments(OpenFHE_CXX_FLAGS_LIST NATIVE_COMMAND "${OpenFHE_CXX_FLAGS}")
     separate_arguments(OpenFHE_EXE_LINKER_FLAGS_LIST NATIVE_COMMAND "${OpenFHE_EXE_LINKER_FLAGS}")
@@ -57,6 +59,8 @@ if(HE_BENCHMARK_BUILD_OPENFHE)
         ${OPENMP_LIBRARIES}
     )
     if(HE_BENCHMARK_LINK_OPENFHE_STATIC)
+        # Static linking is useful on servers where runtime library paths are
+        # harder to control.
         set(HE_BENCHMARK_OPENFHE_LIBRARIES ${OpenFHE_STATIC_LIBRARIES})
     else()
         set(HE_BENCHMARK_OPENFHE_LIBRARIES ${OpenFHE_SHARED_LIBRARIES})

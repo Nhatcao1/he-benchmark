@@ -18,6 +18,8 @@ namespace
     constexpr std::uint32_t kMultiplicativeDepth = 2;
     constexpr std::uint32_t kBatchSize = 8192;
 
+    // OpenFHE packed plaintexts accept signed slot values directly. Normalize
+    // corpus inputs to the same centered interval used for comparison.
     std::vector<int64_t> encode_signed_inputs(
         const std::vector<hebench::ExactRow> &rows,
         bool use_b,
@@ -35,6 +37,8 @@ namespace
         return values;
     }
 
+    // Convert OpenFHE's signed packed result back into unsigned residues so the
+    // shared compare_exact_slots() path can be reused with SEAL.
     std::vector<std::uint64_t> decrypt_decode(
         lbcrypto::CryptoContext<lbcrypto::DCRTPoly> crypto_context,
         const lbcrypto::PrivateKey<lbcrypto::DCRTPoly> &private_key,
@@ -70,6 +74,8 @@ namespace
         std::uint64_t plain_modulus)
     {
         lbcrypto::Ciphertext<lbcrypto::DCRTPoly> result;
+        // Timer starts after encryption/key generation so latency reports only
+        // the homomorphic primitive being benchmarked.
         const hebench::Timer timer;
 
         switch (operation)
@@ -94,6 +100,8 @@ namespace
         const auto elapsed_ms = timer.elapsed_ms();
         const auto decoded = decrypt_decode(crypto_context, private_key, result, plain_modulus);
 
+        // Correctness checking stays outside latency_ms but keeps each result
+        // line self-validating.
         std::string error;
         const bool correct = hebench::compare_exact_slots(decoded, rows, operation, plain_modulus, error);
 
@@ -117,6 +125,8 @@ namespace
 
 int main(int argc, char **argv)
 {
+    // Optional argv[1] lets run scripts sweep exact_safe_*.csv and
+    // exact_edge_cases.csv without recompiling.
     const std::string corpus_path = argc > 1
         ? argv[1]
         : "he_corpus/exact/exact_safe_000008.csv";
@@ -128,6 +138,8 @@ int main(int argc, char **argv)
         {
             throw std::runtime_error("corpus has no rows: " + corpus_path);
         }
+        // The OpenFHE parameter set fixes the packed vector size. Larger corpus
+        // files need a larger batch size or a chunking runner.
         if (rows.size() > kBatchSize)
         {
             throw std::runtime_error("corpus row count exceeds OpenFHE BFV batch size");
@@ -154,6 +166,8 @@ int main(int argc, char **argv)
         const auto encrypted_a = crypto_context->Encrypt(keys.publicKey, plain_a);
         const auto encrypted_b = crypto_context->Encrypt(keys.publicKey, plain_b);
 
+        // Keep operation order aligned with the SEAL runner so output files can
+        // be diffed or joined by operation name.
         bool all_correct = true;
         for (const auto operation : {
                  ExactOperation::add,

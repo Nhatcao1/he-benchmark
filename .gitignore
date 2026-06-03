@@ -3,5 +3,6 @@ __pycache__/
 *.py[cod]
 he_corpus/
 cpp/build/
-cpp/results/*.csv
-cpp/results/*.json
+cpp/results/*
+!cpp/results/.gitkeep
+!cpp/results/README.md

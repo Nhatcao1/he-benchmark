@@ -131,6 +131,13 @@ Small correctness test:
 ./cpp/build/openfhe_bfv_exact he_corpus/exact/exact_safe_000008.csv
 ```
 
+Save the same smoke-test output:
+
+```bash
+./cpp/build/seal_bfv_exact he_corpus/exact/exact_safe_000008.csv > cpp/results/seal_bfv_exact_smoke.csv
+./cpp/build/openfhe_bfv_exact he_corpus/exact/exact_safe_000008.csv > cpp/results/openfhe_bfv_exact_smoke.csv
+```
+
 Edge cases:
 
 ```bash
@@ -138,11 +145,25 @@ Edge cases:
 ./cpp/build/openfhe_bfv_exact he_corpus/exact/exact_edge_cases.csv
 ```
 
+Save edge-case output:
+
+```bash
+./cpp/build/seal_bfv_exact he_corpus/exact/exact_edge_cases.csv > cpp/results/seal_bfv_exact_edge_cases.csv
+./cpp/build/openfhe_bfv_exact he_corpus/exact/exact_edge_cases.csv > cpp/results/openfhe_bfv_exact_edge_cases.csv
+```
+
 Larger packed vector:
 
 ```bash
 ./cpp/build/seal_bfv_exact he_corpus/exact/exact_safe_004096.csv
 ./cpp/build/openfhe_bfv_exact he_corpus/exact/exact_safe_004096.csv
+```
+
+Save larger packed-vector output:
+
+```bash
+./cpp/build/seal_bfv_exact he_corpus/exact/exact_safe_004096.csv > cpp/results/seal_bfv_exact_4096.csv
+./cpp/build/openfhe_bfv_exact he_corpus/exact/exact_safe_004096.csv > cpp/results/openfhe_bfv_exact_4096.csv
 ```
 
 Expected output is one CSV-style line per operation, for example:

@@ -77,10 +77,23 @@ Smoke-tests BFV exact add, subtract, multiply, square, and negate on 8 packed
 slots. This is the fastest correctness check after C++ changes.
 
 ```bash
+./cpp/build/seal_bfv_exact he_corpus/exact/exact_safe_000008.csv > cpp/results/seal_bfv_exact_smoke.csv
+```
+
+Runs the same SEAL smoke test and saves the CSV-style result lines under
+`cpp/results/`. Result files in that directory are ignored by git.
+
+```bash
 ./cpp/build/openfhe_bfv_exact he_corpus/exact/exact_safe_000008.csv
 ```
 
 Runs the same exact arithmetic smoke test through OpenFHE.
+
+```bash
+./cpp/build/openfhe_bfv_exact he_corpus/exact/exact_safe_000008.csv > cpp/results/openfhe_bfv_exact_smoke.csv
+```
+
+Runs the same OpenFHE smoke test and saves the output under `cpp/results/`.
 
 ```bash
 ./cpp/build/seal_bfv_exact he_corpus/exact/exact_edge_cases.csv
@@ -91,9 +104,23 @@ Runs the same BFV exact operations on small signed edge cases. Use this after
 changes to centered modular encoding or comparison logic.
 
 ```bash
+./cpp/build/seal_bfv_exact he_corpus/exact/exact_edge_cases.csv > cpp/results/seal_bfv_exact_edge_cases.csv
+./cpp/build/openfhe_bfv_exact he_corpus/exact/exact_edge_cases.csv > cpp/results/openfhe_bfv_exact_edge_cases.csv
+```
+
+Saves the edge-case correctness output for later comparison.
+
+```bash
 ./cpp/build/seal_bfv_exact he_corpus/exact/exact_safe_004096.csv
 ./cpp/build/openfhe_bfv_exact he_corpus/exact/exact_safe_004096.csv
 ```
 
 Runs the BFV exact operations on a larger packed vector. Use this when checking
 SIMD slot handling and benchmark output at a more realistic size.
+
+```bash
+./cpp/build/seal_bfv_exact he_corpus/exact/exact_safe_004096.csv > cpp/results/seal_bfv_exact_4096.csv
+./cpp/build/openfhe_bfv_exact he_corpus/exact/exact_safe_004096.csv > cpp/results/openfhe_bfv_exact_4096.csv
+```
+
+Saves the larger packed-vector output under `cpp/results/` for local analysis.
