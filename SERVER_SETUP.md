@@ -34,7 +34,33 @@ git clone <YOUR_REPO_URL> seal-openfhe-benchmark
 git clone https://github.com/microsoft/SEAL.git SEAL
 ```
 
-## 3. Build and Install OpenFHE
+## 3. Prepare Microsoft SEAL
+
+The benchmark CMake build uses the sibling `~/SEAL` source tree directly:
+
+```text
+seal-openfhe-benchmark/cpp/CMakeLists.txt
+  -> add_subdirectory("../../SEAL")
+```
+
+That means you do not need to install SEAL separately. When you build `seal_bfv_exact`, CMake will build the SEAL library dependency first, with SEAL examples, tests, and upstream benchmarks disabled.
+
+Optional standalone SEAL build check:
+
+```bash
+cd ~
+cmake -S SEAL -B SEAL/build \
+  -DCMAKE_BUILD_TYPE=Release \
+  -DSEAL_BUILD_EXAMPLES=OFF \
+  -DSEAL_BUILD_TESTS=OFF \
+  -DSEAL_BUILD_BENCH=OFF
+
+cmake --build SEAL/build -j"$(nproc)"
+```
+
+This optional check is useful if you want to confirm SEAL and its dependencies compile before configuring this benchmark repo. The benchmark build still uses its own `cpp/build/` tree.
+
+## 4. Build and Install OpenFHE
 
 ```bash
 cd ~
@@ -53,7 +79,7 @@ sudo cmake --install OpenFHE/build
 
 If `sudo cmake --install` installs to `/usr/local`, your benchmark CMake should find OpenFHE automatically.
 
-## 4. Generate Benchmark Corpus
+## 5. Generate Benchmark Corpus
 
 ```bash
 cd ~/seal-openfhe-benchmark
@@ -69,7 +95,7 @@ This creates or refreshes test CSV files under:
 he_corpus/
 ```
 
-## 5. Configure Benchmark Build
+## 6. Configure Benchmark Build
 
 ```bash
 cd ~/seal-openfhe-benchmark
@@ -88,13 +114,15 @@ cmake -S cpp -B cpp/build \
   -DCMAKE_PREFIX_PATH=/path/to/openfhe/install
 ```
 
-## 6. Build SEAL and OpenFHE Benchmarks
+## 7. Build SEAL and OpenFHE Benchmarks
 
 ```bash
 cmake --build cpp/build --target seal_bfv_exact openfhe_bfv_exact -j"$(nproc)"
 ```
 
-## 7. Run Smoke Tests
+This command also builds the SEAL library dependency from `~/SEAL` before linking `seal_bfv_exact`.
+
+## 8. Run Smoke Tests
 
 Small correctness test:
 
@@ -124,7 +152,7 @@ library=SEAL,scheme=BFV,operation=add,size=8,correct=true,latency_ms=...
 library=OpenFHE,scheme=BFV,operation=add,size=8,correct=true,latency_ms=...
 ```
 
-## 8. If Configure Cannot Find OpenFHE
+## 9. If Configure Cannot Find OpenFHE
 
 Check where OpenFHE installed its CMake files:
 
@@ -141,7 +169,7 @@ cmake -S cpp -B cpp/build \
   -DCMAKE_PREFIX_PATH=/usr/local
 ```
 
-## 9. Clean Rebuild
+## 10. Clean Rebuild
 
 Use this if CMake cache gets confused after changing SEAL/OpenFHE paths:
 
