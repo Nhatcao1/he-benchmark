@@ -1,126 +1,77 @@
 # Run Commands
 
-Run these from the repository root:
+Run these from the repository root.
+
+## Setup
 
 ```bash
 ./setup_venv.sh
-```
-
-Sets up the local Python virtual environment and installs generator dependencies.
-Use this before generating the corpus on a fresh machine or shell.
-
-```bash
 ./generate_corpus.sh
+cmake -S cpp -B cpp/build -DCMAKE_BUILD_TYPE=Release -DHE_BENCHMARK_BUILD_OPENFHE=ON
+cmake --build cpp/build --target seal_bfv_exact openfhe_bfv_exact
 ```
 
-Regenerates deterministic CSV test corpora under `he_corpus/`. This checks the
-Python generator path and refreshes exact, CKKS, rotation, depth, and matrix
-inputs.
+This prepares the Python corpus generator, creates `he_corpus/`, configures the
+C++ build, and builds both exact BFV benchmark executables.
+
+## General Runner
 
 ```bash
-cmake -S cpp -B cpp/build
+./run_benchmarks.py --all --ring-size 8192
 ```
 
-Configures the C++ benchmark build. By default this expects Microsoft SEAL at
-`../SEAL` relative to this repo's parent directory. OpenFHE targets are opt-in.
+Runs every known exact BFV corpus test and writes three reports:
 
-If OpenFHE is not installed yet:
-
-```bash
-cd ~
-git clone https://github.com/openfheorg/openfhe-development.git OpenFHE
-cmake -S OpenFHE -B OpenFHE/build \
-  -DCMAKE_BUILD_TYPE=Release \
-  -DBUILD_EXAMPLES=OFF \
-  -DBUILD_BENCHMARKS=OFF \
-  -DBUILD_UNITTESTS=OFF \
-  -DBUILD_EXTRAS=OFF
-cmake --build OpenFHE/build -j"$(nproc)"
-sudo cmake --install OpenFHE/build
-cd ~/seal-openfhe-benchmark
+```text
+cpp/results/seal.csv
+cpp/results/openfhe.csv
+cpp/results/openfhe_threads6.csv
 ```
 
-If OpenFHE was installed to a custom prefix, configure this repo with:
+The runner maps test names to exact CSV files. `openfhe.csv` runs OpenFHE with
+one OpenMP thread; `openfhe_threads6.csv` runs the same OpenFHE binary with
+`OMP_NUM_THREADS=6`.
 
-```bash
-cmake -S cpp -B cpp/build \
-  -DCMAKE_BUILD_TYPE=Release \
-  -DHE_BENCHMARK_BUILD_OPENFHE=ON \
-  -DCMAKE_PREFIX_PATH=/path/to/openfhe/install
-```
+Each report uses the same row format. The runner adds `test=...` and
+`threads=...` before the executable output, for example:
 
-To build OpenFHE targets with the default OpenFHE install prefix:
-
-```bash
-cmake -S cpp -B cpp/build \
-  -DCMAKE_BUILD_TYPE=Release \
-  -DHE_BENCHMARK_BUILD_OPENFHE=ON
+```text
+test=quick8,threads=1,library=SEAL,scheme=BFV,operation=add,size=8,ring_size=8192,correct=true,latency_ms=...
+test=quick8,threads=6,library=OpenFHE,scheme=BFV,operation=add,size=8,ring_size=8192,correct=true,latency_ms=...
 ```
 
 ```bash
-cmake --build cpp/build --target seal_bfv_exact
+./run_benchmarks.py --tests quick8,edge --ring-size 8192
 ```
 
-Builds the current SEAL BFV exact arithmetic benchmark executable.
+Runs only the 8-slot quick correctness corpus and signed edge-case corpus.
 
 ```bash
-cmake --build cpp/build --target openfhe_bfv_exact
+./run_benchmarks.py --tests 4096 --ring-size 8192
 ```
 
-Builds the current OpenFHE BFV exact arithmetic benchmark executable.
+Runs one larger packed-vector corpus and writes the same three comparison
+reports.
 
 ```bash
-./cpp/build/seal_bfv_exact he_corpus/exact/exact_safe_000008.csv
+./run_benchmarks.py --tests quick8 --only seal --ring-size 8192
 ```
 
-Smoke-tests BFV exact add, subtract, multiply, square, and negate on 8 packed
-slots. This is the fastest correctness check after C++ changes.
+Debug-only path for running just one suite. Normal comparison runs should omit
+`--only`.
 
 ```bash
-./cpp/build/seal_bfv_exact he_corpus/exact/exact_safe_000008.csv > cpp/results/seal_bfv_exact_smoke.csv
+./run_benchmarks.py --list-tests
 ```
 
-Runs the same SEAL smoke test and saves the CSV-style result lines under
-`cpp/results/`. Result files in that directory are ignored by git.
+Shows the supported test names and the corpus file each name resolves to.
+
+## Direct Debug Commands
 
 ```bash
-./cpp/build/openfhe_bfv_exact he_corpus/exact/exact_safe_000008.csv
+./cpp/build/seal_bfv_exact --corpus he_corpus/exact/exact_safe_000008.csv --ring-size 8192
+./cpp/build/openfhe_bfv_exact --corpus he_corpus/exact/exact_safe_000008.csv --ring-size 8192
 ```
 
-Runs the same exact arithmetic smoke test through OpenFHE.
-
-```bash
-./cpp/build/openfhe_bfv_exact he_corpus/exact/exact_safe_000008.csv > cpp/results/openfhe_bfv_exact_smoke.csv
-```
-
-Runs the same OpenFHE smoke test and saves the output under `cpp/results/`.
-
-```bash
-./cpp/build/seal_bfv_exact he_corpus/exact/exact_edge_cases.csv
-./cpp/build/openfhe_bfv_exact he_corpus/exact/exact_edge_cases.csv
-```
-
-Runs the same BFV exact operations on small signed edge cases. Use this after
-changes to centered modular encoding or comparison logic.
-
-```bash
-./cpp/build/seal_bfv_exact he_corpus/exact/exact_edge_cases.csv > cpp/results/seal_bfv_exact_edge_cases.csv
-./cpp/build/openfhe_bfv_exact he_corpus/exact/exact_edge_cases.csv > cpp/results/openfhe_bfv_exact_edge_cases.csv
-```
-
-Saves the edge-case correctness output for later comparison.
-
-```bash
-./cpp/build/seal_bfv_exact he_corpus/exact/exact_safe_004096.csv
-./cpp/build/openfhe_bfv_exact he_corpus/exact/exact_safe_004096.csv
-```
-
-Runs the BFV exact operations on a larger packed vector. Use this when checking
-SIMD slot handling and benchmark output at a more realistic size.
-
-```bash
-./cpp/build/seal_bfv_exact he_corpus/exact/exact_safe_004096.csv > cpp/results/seal_bfv_exact_4096.csv
-./cpp/build/openfhe_bfv_exact he_corpus/exact/exact_safe_004096.csv > cpp/results/openfhe_bfv_exact_4096.csv
-```
-
-Saves the larger packed-vector output under `cpp/results/` for local analysis.
+Use direct commands only when debugging one executable. Normal runs should go
+through `run_benchmarks.py` so corpus selection and result paths stay consistent.

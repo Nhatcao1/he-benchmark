@@ -6,6 +6,7 @@
 
 #include "openfhe.h"
 
+#include "benchmark_args.hpp"
 #include "csv_reader.hpp"
 #include "exact_compare.hpp"
 #include "timer.hpp"
@@ -16,7 +17,6 @@ namespace
 
     constexpr std::uint64_t kPlainModulus = 786433;
     constexpr std::uint32_t kMultiplicativeDepth = 2;
-    constexpr std::uint32_t kBatchSize = 8192;
 
     // OpenFHE packed plaintexts accept signed slot values directly. Normalize
     // corpus inputs to the same centered interval used for comparison.
@@ -47,7 +47,9 @@ namespace
     {
         lbcrypto::Plaintext plaintext;
         crypto_context->Decrypt(private_key, ciphertext, &plaintext);
-        plaintext->SetLength(kBatchSize);
+        // The packed length is fixed by the benchmark's selected ring size.
+        // OpenFHE may return more slots internally, but compare_exact_slots()
+        // only checks the corpus-sized prefix.
 
         const auto &packed = plaintext->GetPackedValue();
         std::vector<std::uint64_t> decoded;
@@ -71,7 +73,8 @@ namespace
         const lbcrypto::Ciphertext<lbcrypto::DCRTPoly> &encrypted_a,
         const lbcrypto::Ciphertext<lbcrypto::DCRTPoly> &encrypted_b,
         ExactOperation operation,
-        std::uint64_t plain_modulus)
+        std::uint64_t plain_modulus,
+        std::size_t ring_size)
     {
         lbcrypto::Ciphertext<lbcrypto::DCRTPoly> result;
         // Timer starts after encryption/key generation so latency reports only
@@ -110,6 +113,7 @@ namespace
             << ",scheme=BFV"
             << ",operation=" << hebench::operation_name(operation)
             << ",size=" << rows.size()
+            << ",ring_size=" << ring_size
             << ",correct=" << (correct ? "true" : "false")
             << ",latency_ms=" << elapsed_ms;
 
@@ -125,22 +129,25 @@ namespace
 
 int main(int argc, char **argv)
 {
-    // Optional argv[1] lets run scripts sweep exact_safe_*.csv and
-    // exact_edge_cases.csv without recompiling.
-    const std::string corpus_path = argc > 1
-        ? argv[1]
-        : "he_corpus/exact/exact_safe_000008.csv";
-
     try
     {
-        const auto rows = hebench::read_exact_csv(corpus_path);
+        // The Python run_benchmarks.py wrapper passes explicit values here.
+        // Defaults keep direct smoke-test execution simple.
+        const auto args = hebench::parse_benchmark_args(argc, argv);
+        if (args.show_help)
+        {
+            std::cout << hebench::benchmark_usage(argv[0]);
+            return 0;
+        }
+
+        const auto rows = hebench::read_exact_csv(args.corpus_path);
         if (rows.empty())
         {
-            throw std::runtime_error("corpus has no rows: " + corpus_path);
+            throw std::runtime_error("corpus has no rows: " + args.corpus_path);
         }
         // The OpenFHE parameter set fixes the packed vector size. Larger corpus
         // files need a larger batch size or a chunking runner.
-        if (rows.size() > kBatchSize)
+        if (rows.size() > args.ring_size)
         {
             throw std::runtime_error("corpus row count exceeds OpenFHE BFV batch size");
         }
@@ -148,7 +155,8 @@ int main(int argc, char **argv)
         lbcrypto::CCParams<lbcrypto::CryptoContextBFVRNS> parameters;
         parameters.SetPlaintextModulus(kPlainModulus);
         parameters.SetMultiplicativeDepth(kMultiplicativeDepth);
-        parameters.SetBatchSize(kBatchSize);
+        parameters.SetRingDim(static_cast<std::uint32_t>(args.ring_size));
+        parameters.SetBatchSize(static_cast<std::uint32_t>(args.ring_size));
 
         auto crypto_context = lbcrypto::GenCryptoContext(parameters);
         crypto_context->Enable(lbcrypto::PKE);
@@ -159,9 +167,9 @@ int main(int argc, char **argv)
         crypto_context->EvalMultKeyGen(keys.secretKey);
 
         const auto plain_a = crypto_context->MakePackedPlaintext(
-            encode_signed_inputs(rows, false, kBatchSize, kPlainModulus));
+            encode_signed_inputs(rows, false, args.ring_size, kPlainModulus));
         const auto plain_b = crypto_context->MakePackedPlaintext(
-            encode_signed_inputs(rows, true, kBatchSize, kPlainModulus));
+            encode_signed_inputs(rows, true, args.ring_size, kPlainModulus));
 
         const auto encrypted_a = crypto_context->Encrypt(keys.publicKey, plain_a);
         const auto encrypted_b = crypto_context->Encrypt(keys.publicKey, plain_b);
@@ -184,7 +192,8 @@ int main(int argc, char **argv)
                 encrypted_a,
                 encrypted_b,
                 operation,
-                kPlainModulus) && all_correct;
+                kPlainModulus,
+                args.ring_size) && all_correct;
         }
 
         return all_correct ? 0 : 1;

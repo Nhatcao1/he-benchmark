@@ -1,71 +1,34 @@
-# Server Setup and Run Commands
+# Server Setup
 
-Run these commands on the remote Linux server.
+Assume this source layout on the server:
 
-## 1. Install System Packages
+```text
+~
+├── SEAL
+├── OpenFHE
+└── seal-openfhe-benchmark
+```
+
+## 1. Install Packages
 
 ```bash
 sudo apt update
 sudo apt install -y git cmake build-essential python3 python3-venv python3-pip
 ```
 
-## 2. Prepare Source Layout
-
-The benchmark repo expects Microsoft SEAL beside it:
-
-```text
-~
-├── SEAL
-└── seal-openfhe-benchmark
-```
-
-If you already cloned `seal-openfhe-benchmark`, only clone SEAL:
+## 2. Clone Sources
 
 ```bash
 cd ~
 git clone https://github.com/microsoft/SEAL.git SEAL
-```
-
-If you have not cloned the benchmark repo yet:
-
-```bash
-cd ~
-git clone <YOUR_REPO_URL> seal-openfhe-benchmark
-git clone https://github.com/microsoft/SEAL.git SEAL
-```
-
-## 3. Prepare Microsoft SEAL
-
-The benchmark CMake build uses the sibling `~/SEAL` source tree directly:
-
-```text
-seal-openfhe-benchmark/cpp/CMakeLists.txt
-  -> add_subdirectory("../../SEAL")
-```
-
-That means you do not need to install SEAL separately. When you build `seal_bfv_exact`, CMake will build the SEAL library dependency first, with SEAL examples, tests, and upstream benchmarks disabled.
-
-Optional standalone SEAL build check:
-
-```bash
-cd ~
-cmake -S SEAL -B SEAL/build \
-  -DCMAKE_BUILD_TYPE=Release \
-  -DSEAL_BUILD_EXAMPLES=OFF \
-  -DSEAL_BUILD_TESTS=OFF \
-  -DSEAL_BUILD_BENCH=OFF
-
-cmake --build SEAL/build -j"$(nproc)"
-```
-
-This optional check is useful if you want to confirm SEAL and its dependencies compile before configuring this benchmark repo. The benchmark build still uses its own `cpp/build/` tree.
-
-## 4. Build and Install OpenFHE
-
-```bash
-cd ~
 git clone https://github.com/openfheorg/openfhe-development.git OpenFHE
+git clone <YOUR_REPO_URL> seal-openfhe-benchmark
+```
 
+## 3. Build and Install OpenFHE
+
+```bash
+cd ~
 cmake -S OpenFHE -B OpenFHE/build \
   -DCMAKE_BUILD_TYPE=Release \
   -DBUILD_EXAMPLES=OFF \
@@ -77,127 +40,85 @@ cmake --build OpenFHE/build -j"$(nproc)"
 sudo cmake --install OpenFHE/build
 ```
 
-If `sudo cmake --install` installs to `/usr/local`, your benchmark CMake should find OpenFHE automatically.
+SEAL does not need a separate install. The benchmark CMake build uses the
+sibling `~/SEAL` source tree directly.
 
-## 5. Generate Benchmark Corpus
+## 4. Generate Corpus
 
 ```bash
 cd ~/seal-openfhe-benchmark
-
-chmod +x setup_venv.sh generate_corpus.sh
+chmod +x setup_venv.sh generate_corpus.sh run_benchmarks.py
 ./setup_venv.sh
 ./generate_corpus.sh
 ```
 
-This creates or refreshes test CSV files under:
+This creates deterministic test CSV files under `he_corpus/`.
 
-```text
-he_corpus/
-```
-
-## 6. Configure Benchmark Build
+## 5. Build Benchmarks
 
 ```bash
 cd ~/seal-openfhe-benchmark
-
 cmake -S cpp -B cpp/build \
   -DCMAKE_BUILD_TYPE=Release \
   -DHE_BENCHMARK_BUILD_OPENFHE=ON
-```
 
-If OpenFHE is installed in a custom location, use:
-
-```bash
-cmake -S cpp -B cpp/build \
-  -DCMAKE_BUILD_TYPE=Release \
-  -DHE_BENCHMARK_BUILD_OPENFHE=ON \
-  -DCMAKE_PREFIX_PATH=/path/to/openfhe/install
-```
-
-## 7. Build SEAL and OpenFHE Benchmarks
-
-```bash
 cmake --build cpp/build --target seal_bfv_exact openfhe_bfv_exact -j"$(nproc)"
 ```
 
-This command also builds the SEAL library dependency from `~/SEAL` before linking `seal_bfv_exact`.
+## 6. Run Benchmarks
 
-## 8. Run Smoke Tests
-
-Small correctness test:
+Run every exact BFV corpus test for both libraries using ring size 8192:
 
 ```bash
-./cpp/build/seal_bfv_exact he_corpus/exact/exact_safe_000008.csv
-./cpp/build/openfhe_bfv_exact he_corpus/exact/exact_safe_000008.csv
+./run_benchmarks.py --all --ring-size 8192
 ```
 
-Save the same smoke-test output:
-
-```bash
-./cpp/build/seal_bfv_exact he_corpus/exact/exact_safe_000008.csv > cpp/results/seal_bfv_exact_smoke.csv
-./cpp/build/openfhe_bfv_exact he_corpus/exact/exact_safe_000008.csv > cpp/results/openfhe_bfv_exact_smoke.csv
-```
-
-Edge cases:
-
-```bash
-./cpp/build/seal_bfv_exact he_corpus/exact/exact_edge_cases.csv
-./cpp/build/openfhe_bfv_exact he_corpus/exact/exact_edge_cases.csv
-```
-
-Save edge-case output:
-
-```bash
-./cpp/build/seal_bfv_exact he_corpus/exact/exact_edge_cases.csv > cpp/results/seal_bfv_exact_edge_cases.csv
-./cpp/build/openfhe_bfv_exact he_corpus/exact/exact_edge_cases.csv > cpp/results/openfhe_bfv_exact_edge_cases.csv
-```
-
-Larger packed vector:
-
-```bash
-./cpp/build/seal_bfv_exact he_corpus/exact/exact_safe_004096.csv
-./cpp/build/openfhe_bfv_exact he_corpus/exact/exact_safe_004096.csv
-```
-
-Save larger packed-vector output:
-
-```bash
-./cpp/build/seal_bfv_exact he_corpus/exact/exact_safe_004096.csv > cpp/results/seal_bfv_exact_4096.csv
-./cpp/build/openfhe_bfv_exact he_corpus/exact/exact_safe_004096.csv > cpp/results/openfhe_bfv_exact_4096.csv
-```
-
-Expected output is one CSV-style line per operation, for example:
+This writes three separate reports:
 
 ```text
-library=SEAL,scheme=BFV,operation=add,size=8,correct=true,latency_ms=...
-library=OpenFHE,scheme=BFV,operation=add,size=8,correct=true,latency_ms=...
+cpp/results/seal.csv
+cpp/results/openfhe.csv
+cpp/results/openfhe_threads6.csv
 ```
 
-## 9. If Configure Cannot Find OpenFHE
+`seal.csv` is the SEAL baseline. `openfhe.csv` is OpenFHE with one OpenMP
+thread. `openfhe_threads6.csv` is the same OpenFHE benchmark with
+`OMP_NUM_THREADS=6`.
 
-Check where OpenFHE installed its CMake files:
+Each report uses the same CSV-style row format. The runner adds `test=...` and
+`threads=...` so the files can be compared directly.
+
+Run a smaller subset while debugging:
 
 ```bash
-sudo find /usr/local -name 'OpenFHEConfig.cmake'
+./run_benchmarks.py --tests quick8,edge --ring-size 8192
 ```
 
-Then configure with the install prefix above the `lib/cmake/OpenFHE` folder. Example:
+Run only one debug suite:
 
 ```bash
-cmake -S cpp -B cpp/build \
-  -DCMAKE_BUILD_TYPE=Release \
-  -DHE_BENCHMARK_BUILD_OPENFHE=ON \
-  -DCMAKE_PREFIX_PATH=/usr/local
+./run_benchmarks.py --tests 4096 --only seal --ring-size 8192
 ```
 
-## 10. Clean Rebuild
-
-Use this if CMake cache gets confused after changing SEAL/OpenFHE paths:
+List supported test names:
 
 ```bash
-rm -rf cpp/build
-cmake -S cpp -B cpp/build \
-  -DCMAKE_BUILD_TYPE=Release \
-  -DHE_BENCHMARK_BUILD_OPENFHE=ON
-cmake --build cpp/build --target seal_bfv_exact openfhe_bfv_exact -j"$(nproc)"
+./run_benchmarks.py --list-tests
+```
+
+## Direct Binary Debugging
+
+The runner resolves test names to exact corpus files. Use direct binary commands
+only when debugging a specific executable:
+
+```bash
+./cpp/build/seal_bfv_exact --corpus he_corpus/exact/exact_safe_000008.csv --ring-size 8192
+./cpp/build/openfhe_bfv_exact --corpus he_corpus/exact/exact_safe_000008.csv --ring-size 8192
+```
+
+Each executable prints one CSV-style line per operation:
+
+```text
+library=SEAL,scheme=BFV,operation=add,size=8,ring_size=8192,correct=true,latency_ms=...
+library=OpenFHE,scheme=BFV,operation=add,size=8,ring_size=8192,correct=true,latency_ms=...
 ```

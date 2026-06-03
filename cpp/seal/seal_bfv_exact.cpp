@@ -6,6 +6,7 @@
 
 #include "seal/seal.h"
 
+#include "benchmark_args.hpp"
 #include "csv_reader.hpp"
 #include "exact_compare.hpp"
 #include "timer.hpp"
@@ -15,8 +16,6 @@ namespace
     using hebench::ExactOperation;
 
     constexpr std::uint64_t kPlainModulusBitSize = 20;
-    constexpr std::size_t kPolyModulusDegree = 8192;
-
     // SEAL's BatchEncoder expects unsigned residues. Convert signed corpus
     // values into [0, t) while preserving their centered plaintext meaning.
     std::vector<std::uint64_t> encode_signed_inputs(
@@ -63,7 +62,8 @@ namespace
         const seal::Ciphertext &encrypted_b,
         const seal::RelinKeys &relin_keys,
         ExactOperation operation,
-        std::uint64_t plain_modulus)
+        std::uint64_t plain_modulus,
+        std::size_t ring_size)
     {
         seal::Ciphertext result;
         // Timer starts after inputs are already encrypted so latency reflects
@@ -104,6 +104,7 @@ namespace
             << ",scheme=BFV"
             << ",operation=" << hebench::operation_name(operation)
             << ",size=" << rows.size()
+            << ",ring_size=" << ring_size
             << ",correct=" << (correct ? "true" : "false")
             << ",latency_ms=" << elapsed_ms;
 
@@ -119,24 +120,27 @@ namespace
 
 int main(int argc, char **argv)
 {
-    // Optional argv[1] lets run scripts sweep exact_safe_*.csv and
-    // exact_edge_cases.csv without recompiling.
-    const std::string corpus_path = argc > 1
-        ? argv[1]
-        : "he_corpus/exact/exact_safe_000008.csv";
-
     try
     {
-        const auto rows = hebench::read_exact_csv(corpus_path);
+        // The Python run_benchmarks.py wrapper passes explicit values here.
+        // Defaults keep direct smoke-test execution simple.
+        const auto args = hebench::parse_benchmark_args(argc, argv);
+        if (args.show_help)
+        {
+            std::cout << hebench::benchmark_usage(argv[0]);
+            return 0;
+        }
+
+        const auto rows = hebench::read_exact_csv(args.corpus_path);
         if (rows.empty())
         {
-            throw std::runtime_error("corpus has no rows: " + corpus_path);
+            throw std::runtime_error("corpus has no rows: " + args.corpus_path);
         }
 
         seal::EncryptionParameters parms(seal::scheme_type::bfv);
-        parms.set_poly_modulus_degree(kPolyModulusDegree);
-        parms.set_coeff_modulus(seal::CoeffModulus::BFVDefault(kPolyModulusDegree));
-        parms.set_plain_modulus(seal::PlainModulus::Batching(kPolyModulusDegree, kPlainModulusBitSize));
+        parms.set_poly_modulus_degree(args.ring_size);
+        parms.set_coeff_modulus(seal::CoeffModulus::BFVDefault(args.ring_size));
+        parms.set_plain_modulus(seal::PlainModulus::Batching(args.ring_size, kPlainModulusBitSize));
 
         seal::SEALContext context(parms);
         if (!context.parameters_set())
@@ -198,7 +202,8 @@ int main(int argc, char **argv)
                 encrypted_b,
                 relin_keys,
                 operation,
-                plain_modulus) && all_correct;
+                plain_modulus,
+                args.ring_size) && all_correct;
         }
 
         return all_correct ? 0 : 1;
