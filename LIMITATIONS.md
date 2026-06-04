@@ -27,13 +27,24 @@ SEAL/OpenFHE benchmark suite. It is not a bug log.
 
 ## OpenFHE Serialization
 
-- OpenFHE BFV object serialization is currently not used inside
-  `openfhe_bfv_exact`.
-- Attempts to serialize OpenFHE BFV relin/eval keys or objects for byte-size
-  reporting failed with cereal polymorphic type registration errors.
-- OpenFHE BFV rows currently report timing, throughput, and correctness, but do
-  not report object `byte_size`.
+- OpenFHE BFV object serialization is isolated in `openfhe_bfv_serialization`
+  instead of being mixed into exact or rotation correctness runners.
+- OpenFHE serialization requires the OpenFHE serialization headers such as
+  `ciphertext-ser.h`, `cryptocontext-ser.h`, `key/key-ser.h`, and
+  `scheme/bfvrns/bfvrns-ser.h` so cereal type registration is available.
+- If OpenFHE serialization fails, exact and rotation runners should still be
+  treated independently.
 - SEAL BFV rows still report byte sizes where available.
+
+## Serialization Thread Scaling
+
+- Key and object serialization rows may appear in both OpenFHE 1-thread and
+  OpenFHE 6-thread result files because the runner executes both suites.
+- Those rows should not be interpreted as meaningful OpenMP thread-scaling
+  measurements unless the underlying library serialization routine is known to
+  parallelize internally.
+- For serialization, compare `byte_size`, `latency_ms`, and `mb_per_sec` first;
+  thread scaling is secondary and may be noise.
 
 ## BFV Rotation Semantics
 

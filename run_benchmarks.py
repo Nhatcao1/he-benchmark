@@ -50,6 +50,10 @@ LIBRARIES = {
         "seal": "seal_bfv_rotation",
         "openfhe": "openfhe_bfv_rotation",
     },
+    "serialization": {
+        "seal": "seal_bfv_serialization",
+        "openfhe": "openfhe_bfv_serialization",
+    },
 }
 
 # The benchmark's normal comparison is fixed on purpose:
@@ -151,7 +155,7 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--kind",
-        choices=["exact", "rotation"],
+        choices=["exact", "rotation", "serialization"],
         default="exact",
         help="benchmark group to run",
     )

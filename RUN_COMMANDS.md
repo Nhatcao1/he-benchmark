@@ -23,6 +23,12 @@ Rotation runner command:
 ./run_benchmarks.py --kind rotation --all --ring-size 8192
 ```
 
+Serialization runner command:
+
+```bash
+./run_benchmarks.py --kind serialization --tests quick8,256,edge --ring-size 8192
+```
+
 It writes:
 
 ```text
@@ -82,8 +88,8 @@ cmake --build cpp/build --target seal_bfv_exact openfhe_bfv_exact
 | Exact correctness | Encrypt, compute, decrypt, validate | BFV, BGV | Implemented for BFV | `./run_benchmarks.py --all --ring-size 8192` |
 | CKKS numerical accuracy | Encrypt, compute, decrypt, compare baseline | CKKS | Planned | CKKS corpus exists, no runner yet |
 | Multiplicative depth | Multiplication chain depth 1 to 4 | BFV, BGV, CKKS | Planned | Depth corpus exists, no runner yet |
-| Serialization ciphertext | Serialize and deserialize ciphertext | BFV, BGV, CKKS | Planned | No serialization runner yet |
-| Serialization keys | Serialize and deserialize keys | BFV, BGV, CKKS | Planned | No serialization runner yet |
+| Serialization ciphertext | Serialize and deserialize ciphertext | BFV, BGV, CKKS | Implemented for BFV | Run `./run_benchmarks.py --kind serialization --tests quick8,256,edge --ring-size 8192`; reports `serialize_ciphertext`, `deserialize_ciphertext`, `byte_size`, `mb_per_sec` |
+| Serialization keys | Serialize and deserialize keys | BFV, BGV, CKKS | Implemented for BFV | Reports secret/public key serialize+deserialize; relin/rotation key serialization rows; SEAL also reports relin/rotation key deserialize rows |
 | SIMD packing efficiency | Vary used slot count | BFV, BGV, CKKS | Implemented for BFV exact | Compare `values_per_sec` across quick8, 256, 4096, 8192; run `./run_benchmarks.py --all --ring-size 8192` |
 | Thread scaling | Run same workload with multiple thread counts | BFV, BGV, CKKS | Partial for OpenFHE BFV | Compare `ops_per_sec` and `values_per_sec` in `openfhe.csv` vs `openfhe_threads6.csv` |
 | Primitive NTT / INTT | NTT forward, INTT inverse | Low-level kernel | Planned | No low-level kernel runner yet |
