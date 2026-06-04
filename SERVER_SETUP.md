@@ -62,7 +62,7 @@ cmake -S cpp -B cpp/build \
   -DCMAKE_BUILD_TYPE=Release \
   -DHE_BENCHMARK_BUILD_OPENFHE=ON
 
-cmake --build cpp/build --target seal_bfv_exact seal_bfv_rotation openfhe_bfv_exact openfhe_bfv_rotation -j"$(nproc)"
+cmake --build cpp/build --target seal_bfv_exact seal_bfv_rotation seal_bfv_serialization openfhe_bfv_exact openfhe_bfv_rotation openfhe_bfv_serialization -j"$(nproc)"
 ```
 
 ## 6. Run Benchmarks
@@ -77,6 +77,12 @@ Run BFV rotation tests (ring size 8192 required):
 
 ```bash
 ./run_benchmarks.py --kind rotation --all --ring-size 8192
+```
+
+Run BFV serialization tests:
+
+```bash
+./run_benchmarks.py --kind serialization --tests quick8,256,edge --ring-size 8192
 ```
 
 This writes three separate reports:
