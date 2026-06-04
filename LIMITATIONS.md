@@ -6,6 +6,8 @@ SEAL/OpenFHE benchmark suite. It is not a bug log.
 ## BFV Ring Size
 
 - Combined SEAL + OpenFHE BFV runs should use `ring_size >= 8192`.
+- Ring-size support is not assumed to be symmetric between libraries. Combined
+  runs are limited by the stricter library for the selected parameter set.
 - `ring_size=2048` is too small for the expanded SEAL BFV benchmark because the
   current suite creates relinearization keys and runs relin/key-switch dependent
   operations.
@@ -14,6 +16,8 @@ SEAL/OpenFHE benchmark suite. It is not a bug log.
 - Recommended combined comparison ring sizes:
   - `8192`
   - `16384`
+- Use `--only seal`, `--only openfhe`, or `--only openfhe6` for
+  library-specific ring experiments that are not valid combined comparisons.
 
 ## BFV Corpus Size vs Ring Size
 
@@ -33,7 +37,8 @@ SEAL/OpenFHE benchmark suite. It is not a bug log.
 
 ## Current Scope
 
-- Current implemented scheme scope is BFV exact benchmarking.
+- Current implemented scheme scope is BFV exact primitive benchmarking and BFV
+  rotation benchmarking.
 - BGV is not treated as identical to BFV. It should be added as separate
   `scheme=BGV` benchmark targets and result rows.
 - CKKS requires separate numerical accuracy metrics such as MAE, RMSE, max

@@ -32,9 +32,24 @@ TESTS = {
     "edge": "he_corpus/exact/exact_edge_cases.csv",
 }
 
+ROTATION_TESTS = {
+    "quick8": "he_corpus/rotation/rotation_000008.csv",
+    "smoke": "he_corpus/rotation/rotation_000008.csv",
+    "8": "he_corpus/rotation/rotation_000008.csv",
+    "256": "he_corpus/rotation/rotation_000256.csv",
+    "4096": "he_corpus/rotation/rotation_004096.csv",
+    "8192": "he_corpus/rotation/rotation_008192.csv",
+}
+
 LIBRARIES = {
-    "seal": "seal_bfv_exact",
-    "openfhe": "openfhe_bfv_exact",
+    "exact": {
+        "seal": "seal_bfv_exact",
+        "openfhe": "openfhe_bfv_exact",
+    },
+    "rotation": {
+        "seal": "seal_bfv_rotation",
+        "openfhe": "openfhe_bfv_rotation",
+    },
 }
 
 # The benchmark's normal comparison is fixed on purpose:
@@ -66,12 +81,14 @@ def split_names(value: str) -> list[str]:
     return [item.strip().lower() for item in value.split(",") if item.strip()]
 
 
-def expand_tests(value: str, run_all: bool) -> list[str]:
+def expand_tests(value: str, run_all: bool, available_tests: dict[str, str]) -> list[str]:
     if run_all or value.lower() == "all":
-        return ["quick8", "256", "4096", "8192", "edge"]
+        if "edge" in available_tests:
+            return ["quick8", "256", "4096", "8192", "edge"]
+        return ["quick8", "256", "4096", "8192"]
 
     tests = split_names(value)
-    unknown = [name for name in tests if name not in TESTS]
+    unknown = [name for name in tests if name not in available_tests]
     if unknown:
         raise ValueError("unknown test(s): " + ", ".join(unknown))
     return tests
@@ -111,6 +128,12 @@ def parse_args() -> argparse.Namespace:
         "--tests",
         default="quick8",
         help="comma-separated tests: quick8,edge,8,256,4096,8192,all",
+    )
+    parser.add_argument(
+        "--kind",
+        choices=["exact", "rotation"],
+        default="exact",
+        help="benchmark group to run",
     )
     parser.add_argument(
         "--only",
@@ -155,7 +178,8 @@ def main() -> int:
     args = parse_args()
 
     if args.list_tests:
-        for name, corpus in TESTS.items():
+        available_tests = ROTATION_TESTS if args.kind == "rotation" else TESTS
+        for name, corpus in available_tests.items():
             print(f"{name}: {corpus}")
         return 0
 
@@ -164,7 +188,8 @@ def main() -> int:
         return 2
 
     try:
-        tests = expand_tests(args.tests, args.all)
+        available_tests = ROTATION_TESTS if args.kind == "rotation" else TESTS
+        tests = expand_tests(args.tests, args.all, available_tests)
         suites = expand_suites(args.only)
     except ValueError as error:
         print(error, file=sys.stderr)
@@ -179,12 +204,12 @@ def main() -> int:
         threads = int(suite["threads"])
 
         for test_name in tests:
-            corpus = ROOT / TESTS[test_name]
+            corpus = ROOT / available_tests[test_name]
             if not corpus.exists():
                 print(f"missing corpus for test '{test_name}': {corpus}", file=sys.stderr)
                 return 2
 
-            binary = build_dir / LIBRARIES[str(library)]
+            binary = build_dir / LIBRARIES[args.kind][str(library)]
             command = build_command(binary, corpus, args.ring_size)
 
             if args.dry_run:
@@ -194,7 +219,7 @@ def main() -> int:
 
             if not binary.exists():
                 print(f"missing binary for {library}: {binary}", file=sys.stderr)
-                print("build it with: cmake --build cpp/build --target " + LIBRARIES[library], file=sys.stderr)
+                print("build it with: cmake --build cpp/build --target " + LIBRARIES[args.kind][library], file=sys.stderr)
                 return 2
 
             # OpenFHE parallelism is controlled per child process so the 1-thread
@@ -246,7 +271,10 @@ def main() -> int:
             output_text = "\n".join(output_by_suite[suite_name])
             if output_text:
                 output_text += "\n"
-            output_path = output_dir / str(SUITES[suite_name]["output"])
+            output_name = str(SUITES[suite_name]["output"])
+            if args.kind != "exact":
+                output_name = output_name.replace(".csv", f"_{args.kind}.csv")
+            output_path = output_dir / output_name
             output_path.write_text(output_text, encoding="utf-8")
             print(f"wrote {output_path}")
 

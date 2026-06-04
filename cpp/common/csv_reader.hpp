@@ -24,6 +24,12 @@ namespace hebench
         std::int64_t expected_negate_a = 0;
     };
 
+    struct RotationRow
+    {
+        std::size_t index = 0;
+        std::int64_t value = 0;
+    };
+
     inline std::string trim_ascii_whitespace(const std::string &value)
     {
         // The generated CSVs do not quote fields, but trimming keeps this reader
@@ -120,6 +126,49 @@ namespace hebench
             row.expected_mul = parse_i64(fields[5], path, line_number);
             row.expected_square_a = parse_i64(fields[6], path, line_number);
             row.expected_negate_a = parse_i64(fields[7], path, line_number);
+            rows.push_back(row);
+        }
+
+        return rows;
+    }
+
+    inline std::vector<RotationRow> read_rotation_csv(const std::string &path)
+    {
+        // Rotation CSV schema: index,value
+        std::ifstream file(path);
+        if (!file)
+        {
+            throw std::runtime_error("failed to open CSV: " + path);
+        }
+
+        std::string line;
+        if (!std::getline(file, line))
+        {
+            throw std::runtime_error("empty CSV: " + path);
+        }
+
+        std::vector<RotationRow> rows;
+        std::size_t line_number = 1;
+
+        while (std::getline(file, line))
+        {
+            ++line_number;
+            if (line.empty())
+            {
+                continue;
+            }
+
+            const auto fields = split_csv_line(line);
+            if (fields.size() != 2)
+            {
+                throw std::runtime_error(
+                    path + ":" + std::to_string(line_number) + ": expected 2 columns, got " +
+                    std::to_string(fields.size()));
+            }
+
+            RotationRow row;
+            row.index = static_cast<std::size_t>(parse_i64(fields[0], path, line_number));
+            row.value = parse_i64(fields[1], path, line_number);
             rows.push_back(row);
         }
 
