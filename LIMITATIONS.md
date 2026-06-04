@@ -35,6 +35,17 @@ SEAL/OpenFHE benchmark suite. It is not a bug log.
   not report object `byte_size`.
 - SEAL BFV rows still report byte sizes where available.
 
+## BFV Rotation Semantics
+
+- BFV rotation correctness is checked with library-specific packing semantics.
+- SEAL `BatchEncoder` rotation is modeled as row-wise rotation over its padded
+  two-row batching layout.
+- OpenFHE BFV rotation is also checked row-wise over the effective half-ring
+  rotation domain observed for packed BFV vectors.
+- Because of these packing differences, rotation results should be compared by
+  operation timing and correctness status, not by assuming identical slot-index
+  movement across SEAL and OpenFHE.
+
 ## Current Scope
 
 - Current implemented scheme scope is BFV exact primitive benchmarking and BFV
