@@ -245,6 +245,8 @@ def main() -> int:
             if completed.stderr:
                 print(completed.stderr, file=sys.stderr, end="")
             if completed.returncode != 0:
+                if completed.stdout:
+                    print(completed.stdout, file=sys.stderr, end="")
                 print("command failed: " + " ".join(command), file=sys.stderr)
                 return completed.returncode
 
