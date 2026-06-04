@@ -306,13 +306,6 @@ int main(int argc, char **argv)
         crypto_context->EvalMultKeyGen(keys.secretKey);
         const auto relin_keygen_ms = relin_keygen_timer.elapsed_ms();
 
-        std::stringstream relin_key_stream;
-        lbcrypto::CryptoContextImpl<lbcrypto::DCRTPoly>::SerializeEvalMultKey(
-            relin_key_stream,
-            lbcrypto::SerType::BINARY,
-            keys.secretKey->GetKeyTag());
-        const auto relin_key_bytes = relin_key_stream.str().size();
-
         print_metric_row(
             "keygen",
             rows.size(),
@@ -331,8 +324,7 @@ int main(int argc, char **argv)
             true,
             relin_keygen_ms,
             1.0,
-            0,
-            relin_key_bytes);
+            0);
 
         const hebench::Timer encode_timer;
         const auto plain_a = crypto_context->MakePackedPlaintext(
