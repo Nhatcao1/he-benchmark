@@ -54,23 +54,22 @@ namespace
     std::int64_t expected_full_vector(
         const std::vector<hebench::RotationRow> &rows,
         std::size_t index,
-        std::size_t slot_count,
         int step,
         bool left)
     {
+        const auto active_size = rows.size();
         const auto normalized_step = static_cast<std::size_t>(
-            ((step % static_cast<int>(slot_count)) + static_cast<int>(slot_count)) %
-            static_cast<int>(slot_count));
+            ((step % static_cast<int>(active_size)) + static_cast<int>(active_size)) %
+            static_cast<int>(active_size));
         const auto source_position = left
-            ? (index + normalized_step) % slot_count
-            : (index + slot_count - normalized_step) % slot_count;
-        return source_position < rows.size() ? rows[source_position].value : 0;
+            ? (index + normalized_step) % active_size
+            : (index + active_size - normalized_step) % active_size;
+        return rows[source_position].value;
     }
 
     bool compare_rotation(
         const std::vector<std::uint64_t> &actual,
         const std::vector<hebench::RotationRow> &rows,
-        std::size_t slot_count,
         int step,
         std::uint64_t plain_modulus,
         std::string &matched_direction,
@@ -87,7 +86,7 @@ namespace
             bool ok = true;
             for (std::size_t i = 0; i < rows.size(); ++i)
             {
-                const auto expected = hebench::centered_mod(expected_full_vector(rows, i, slot_count, step, left), plain_modulus);
+                const auto expected = hebench::centered_mod(expected_full_vector(rows, i, step, left), plain_modulus);
                 const auto decoded = hebench::centered_mod_u64(actual[i], plain_modulus);
                 if (decoded != expected)
                 {
@@ -105,7 +104,7 @@ namespace
 
         for (std::size_t i = 0; i < rows.size(); ++i)
         {
-            const auto expected = hebench::centered_mod(expected_full_vector(rows, i, slot_count, step, true), plain_modulus);
+            const auto expected = hebench::centered_mod(expected_full_vector(rows, i, step, true), plain_modulus);
             const auto decoded = hebench::centered_mod_u64(actual[i], plain_modulus);
             if (decoded != expected)
             {
@@ -214,7 +213,6 @@ int main(int argc, char **argv)
             const bool correct = compare_rotation(
                 decoded,
                 rows,
-                args.ring_size,
                 step,
                 kPlainModulus,
                 matched_direction,
