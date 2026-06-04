@@ -56,14 +56,6 @@ namespace
         std::cout << '\n';
     }
 
-    template <typename T>
-    std::size_t serialized_size(const T &value)
-    {
-        std::stringstream stream;
-        lbcrypto::Serial::Serialize(value, stream, lbcrypto::SerType::BINARY);
-        return stream.str().size();
-    }
-
     bool compare_input_slots(
         const std::vector<std::uint64_t> &actual,
         const std::vector<hebench::ExactRow> &rows,
@@ -256,7 +248,7 @@ namespace
             elapsed_ms,
             1.0,
             rows.size(),
-            serialized_size(result),
+            0,
             correct ? "" : "error=\"" + error + "\"");
         return correct;
     }
@@ -313,10 +305,7 @@ int main(int argc, char **argv)
             true,
             keygen_ms,
             1.0,
-            0,
-            serialized_size(keys.secretKey) + serialized_size(keys.publicKey),
-            "secret_key_bytes=" + std::to_string(serialized_size(keys.secretKey)) +
-                ",public_key_bytes=" + std::to_string(serialized_size(keys.publicKey)));
+            0);
         print_metric_row(
             "relin_keygen",
             rows.size(),
@@ -339,8 +328,7 @@ int main(int argc, char **argv)
             true,
             encode_ms,
             2.0,
-            rows.size() * 2,
-            serialized_size(plain_a) + serialized_size(plain_b));
+            rows.size() * 2);
 
         const hebench::Timer decode_timer;
         const auto &packed_a = plain_a->GetPackedValue();
@@ -390,8 +378,7 @@ int main(int argc, char **argv)
             true,
             encrypt_ms,
             2.0,
-            rows.size() * 2,
-            serialized_size(encrypted_a) + serialized_size(encrypted_b));
+            rows.size() * 2);
 
         const hebench::Timer decrypt_timer;
         const auto decrypted_a = decrypt_decode(crypto_context, keys.secretKey, encrypted_a, kPlainModulus);
