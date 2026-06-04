@@ -115,6 +115,26 @@ def build_command(binary: Path, corpus: Path, ring_size: int) -> list[str]:
     ]
 
 
+def write_result_files(
+    output_by_suite: dict[str, list[str]],
+    suites: list[str],
+    out_dir: str,
+    kind: str,
+) -> None:
+    output_dir = ROOT / out_dir
+    output_dir.mkdir(parents=True, exist_ok=True)
+    for suite_name in suites:
+        output_text = "\n".join(output_by_suite[suite_name])
+        if output_text:
+            output_text += "\n"
+        output_name = str(SUITES[suite_name]["output"])
+        if kind != "exact":
+            output_name = output_name.replace(".csv", f"_{kind}.csv")
+        output_path = output_dir / output_name
+        output_path.write_text(output_text, encoding="utf-8")
+        print(f"wrote {output_path}")
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Run SEAL/OpenFHE BFV exact benchmarks from named corpus tests.",
@@ -242,14 +262,6 @@ def main() -> int:
                 stderr=subprocess.PIPE,
                 check=False,
             )
-            if completed.stderr:
-                print(completed.stderr, file=sys.stderr, end="")
-            if completed.returncode != 0:
-                if completed.stdout:
-                    print(completed.stdout, file=sys.stderr, end="")
-                print("command failed: " + " ".join(command), file=sys.stderr)
-                return completed.returncode
-
             for line in completed.stdout.splitlines():
                 if line.strip():
                     output_by_suite[suite_name].append(
@@ -257,6 +269,16 @@ def main() -> int:
                         f"started_utc={started_iso},"
                         f"test={test_name},threads={threads},{line}"
                     )
+
+            if completed.stderr:
+                print(completed.stderr, file=sys.stderr, end="")
+            if completed.returncode != 0:
+                if completed.stdout:
+                    print(completed.stdout, file=sys.stderr, end="")
+                if not args.stdout:
+                    write_result_files(output_by_suite, suites, args.out_dir, args.kind)
+                print("command failed: " + " ".join(command), file=sys.stderr)
+                return completed.returncode
 
     if args.dry_run:
         return 0
@@ -267,18 +289,7 @@ def main() -> int:
             if output_text:
                 print(output_text)
     else:
-        output_dir = ROOT / args.out_dir
-        output_dir.mkdir(parents=True, exist_ok=True)
-        for suite_name in suites:
-            output_text = "\n".join(output_by_suite[suite_name])
-            if output_text:
-                output_text += "\n"
-            output_name = str(SUITES[suite_name]["output"])
-            if args.kind != "exact":
-                output_name = output_name.replace(".csv", f"_{args.kind}.csv")
-            output_path = output_dir / output_name
-            output_path.write_text(output_text, encoding="utf-8")
-            print(f"wrote {output_path}")
+        write_result_files(output_by_suite, suites, args.out_dir, args.kind)
 
     return 0
 
