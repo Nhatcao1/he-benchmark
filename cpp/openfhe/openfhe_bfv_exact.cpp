@@ -252,6 +252,46 @@ namespace
             correct ? "" : "error=\"" + error + "\"");
         return correct;
     }
+
+    bool run_relinearization(
+        lbcrypto::CryptoContext<lbcrypto::DCRTPoly> crypto_context,
+        const lbcrypto::PrivateKey<lbcrypto::DCRTPoly> &private_key,
+        const std::vector<hebench::ExactRow> &rows,
+        const lbcrypto::Ciphertext<lbcrypto::DCRTPoly> &encrypted_a,
+        const lbcrypto::Ciphertext<lbcrypto::DCRTPoly> &encrypted_b,
+        std::uint64_t plain_modulus,
+        std::size_t ring_size)
+    {
+        const auto product = crypto_context->EvalMultNoRelin(encrypted_a, encrypted_b);
+        const auto components_before = product->NumberCiphertextElements();
+
+        const hebench::Timer timer;
+        const auto relinearized = crypto_context->Relinearize(product);
+        const auto elapsed_ms = timer.elapsed_ms();
+
+        const auto components_after = relinearized->NumberCiphertextElements();
+        const auto reduction_ratio = components_before > 0
+            ? static_cast<double>(components_after) / static_cast<double>(components_before)
+            : 0.0;
+        const auto decoded = decrypt_decode(crypto_context, private_key, relinearized, plain_modulus);
+
+        std::string error;
+        const bool correct = hebench::compare_exact_slots(decoded, rows, ExactOperation::mul, plain_modulus, error);
+        print_metric_row(
+            "relin",
+            rows.size(),
+            ring_size,
+            correct,
+            elapsed_ms,
+            1.0,
+            rows.size(),
+            0,
+            "components_before=" + std::to_string(components_before) +
+                ",components_after=" + std::to_string(components_after) +
+                ",reduction_ratio=" + std::to_string(reduction_ratio) +
+                (correct ? "" : ",error=\"" + error + "\""));
+        return correct;
+    }
 }
 
 int main(int argc, char **argv)
@@ -402,6 +442,15 @@ int main(int argc, char **argv)
         // Keep operation order aligned with the SEAL runner so output files can
         // be diffed or joined by operation name.
         bool all_correct = true;
+        all_correct = run_relinearization(
+            crypto_context,
+            keys.secretKey,
+            rows,
+            encrypted_a,
+            encrypted_b,
+            kPlainModulus,
+            args.ring_size) && all_correct;
+
         for (const auto operation : {
                  ExactOperation::add,
                  ExactOperation::sub,

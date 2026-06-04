@@ -252,6 +252,55 @@ namespace
             correct ? "" : "error=\"" + error + "\"");
         return correct;
     }
+
+    bool run_relinearization(
+        seal::Evaluator &evaluator,
+        seal::Decryptor &decryptor,
+        seal::BatchEncoder &encoder,
+        const std::vector<hebench::ExactRow> &rows,
+        const seal::Ciphertext &encrypted_a,
+        const seal::Ciphertext &encrypted_b,
+        const seal::RelinKeys &relin_keys,
+        std::uint64_t plain_modulus,
+        std::size_t ring_size)
+    {
+        seal::Ciphertext product;
+        evaluator.multiply(encrypted_a, encrypted_b, product);
+
+        const auto size_before_bytes = serialized_size(product);
+        const auto components_before = product.size();
+
+        seal::Ciphertext relinearized = product;
+        const hebench::Timer timer;
+        evaluator.relinearize_inplace(relinearized, relin_keys);
+        const auto elapsed_ms = timer.elapsed_ms();
+
+        const auto size_after_bytes = serialized_size(relinearized);
+        const auto components_after = relinearized.size();
+        const auto reduction_ratio = size_before_bytes > 0
+            ? static_cast<double>(size_after_bytes) / static_cast<double>(size_before_bytes)
+            : 0.0;
+        const auto decoded = decrypt_decode(decryptor, encoder, relinearized);
+
+        std::string error;
+        const bool correct = hebench::compare_exact_slots(decoded, rows, ExactOperation::mul, plain_modulus, error);
+        print_metric_row(
+            "relin",
+            rows.size(),
+            ring_size,
+            correct,
+            elapsed_ms,
+            1.0,
+            rows.size(),
+            size_after_bytes,
+            "size_before_bytes=" + std::to_string(size_before_bytes) +
+                ",size_after_bytes=" + std::to_string(size_after_bytes) +
+                ",components_before=" + std::to_string(components_before) +
+                ",components_after=" + std::to_string(components_after) +
+                ",reduction_ratio=" + std::to_string(reduction_ratio) +
+                (correct ? "" : ",error=\"" + error + "\""));
+        return correct;
+    }
 }
 
 int main(int argc, char **argv)
@@ -409,6 +458,17 @@ int main(int argc, char **argv)
         // Keep operations in a fixed order so result logs are easy to diff
         // across SEAL/OpenFHE and across parameter changes.
         bool all_correct = true;
+        all_correct = run_relinearization(
+            evaluator,
+            decryptor,
+            encoder,
+            rows,
+            encrypted_a,
+            encrypted_b,
+            relin_keys,
+            plain_modulus,
+            args.ring_size) && all_correct;
+
         for (const auto operation : {
                  ExactOperation::add,
                  ExactOperation::sub,

@@ -81,7 +81,7 @@ cmake --build cpp/build --target seal_bfv_exact openfhe_bfv_exact
 | Multiplication ct-pt | `Enc(a) * b` | BFV, BGV, CKKS | Implemented for BFV exact | Reports `operation=mul_plain`, `latency_ms`, `ops_per_sec`, `values_per_sec`, `byte_size` |
 | Square | `Enc(a)^2` | BFV, BGV, CKKS | Implemented for BFV | Reports `latency_ms`, `ops_per_sec`, `values_per_sec`; run `./run_benchmarks.py --tests quick8 --ring-size 8192` |
 | Negate | `-Enc(a)` | BFV, BGV, CKKS | Implemented for BFV | Reports `latency_ms`, `ops_per_sec`, `values_per_sec`; run `./run_benchmarks.py --tests quick8 --ring-size 8192` |
-| Relinearization | Multiply, measure size, relin, measure size | BFV, BGV, CKKS | Partial for BFV | BFV multiply/square call relin, but size-before/after is not reported yet |
+| Relinearization | Multiply, measure size, relin, measure size | BFV, BGV, CKKS | Implemented for BFV exact | Reports `operation=relin`, `latency_ms`, `components_before`, `components_after`, `reduction_ratio`; SEAL also reports `size_before_bytes` and `size_after_bytes` |
 | Rotate slots | Rotate packed vector +1, -1, +8 slots | BFV, BGV, CKKS | Implemented for BFV | Run `./run_benchmarks.py --kind rotation --all --ring-size 8192`; reports `rotate_1`, `rotate_-1`, `rotate_8` |
 | Modulus switching | Drop ciphertext to one lower modulus level | BFV, BGV | Planned | No modulus-switch runner yet |
 | CKKS rescaling | Multiply, relin, rescale | CKKS | Planned | CKKS runner not implemented yet |
