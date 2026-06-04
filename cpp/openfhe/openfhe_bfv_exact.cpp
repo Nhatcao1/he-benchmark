@@ -216,7 +216,7 @@ namespace
         const lbcrypto::PrivateKey<lbcrypto::DCRTPoly> &private_key,
         const std::vector<hebench::ExactRow> &rows,
         const lbcrypto::Ciphertext<lbcrypto::DCRTPoly> &encrypted_a,
-        const lbcrypto::Plaintext &plain_b,
+        lbcrypto::Plaintext plain_b,
         ExactOperation operation,
         std::uint64_t plain_modulus,
         std::size_t ring_size)
