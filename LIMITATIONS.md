@@ -38,13 +38,10 @@ SEAL/OpenFHE benchmark suite. It is not a bug log.
 
 ## Serialization Thread Scaling
 
-- Key and object serialization rows may appear in both OpenFHE 1-thread and
-  OpenFHE 6-thread result files because the runner executes both suites.
-- Those rows should not be interpreted as meaningful OpenMP thread-scaling
-  measurements unless the underlying library serialization routine is known to
-  parallelize internally.
-- For serialization, compare `byte_size`, `latency_ms`, and `mb_per_sec` first;
-  thread scaling is secondary and may be noise.
+- Serialization runs intentionally skip the OpenFHE 6-thread suite.
+- Key and object serialization should be treated as single-process baseline I/O
+  and object encoding work, not as an OpenMP thread-scaling primitive.
+- For serialization, compare `byte_size`, `latency_ms`, and `mb_per_sec`.
 
 ## BFV Rotation Semantics
 

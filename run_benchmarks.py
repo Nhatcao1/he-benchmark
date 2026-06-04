@@ -109,6 +109,12 @@ def expand_suites(value: str) -> list[str]:
     return suites
 
 
+def filter_suites_for_kind(suites: list[str], kind: str) -> list[str]:
+    if kind == "serialization":
+        return [suite for suite in suites if suite != "openfhe6"]
+    return suites
+
+
 def build_command(binary: Path, corpus: Path, ring_size: int) -> list[str]:
     return [
         str(binary),
@@ -214,7 +220,7 @@ def main() -> int:
     try:
         available_tests = ROTATION_TESTS if args.kind == "rotation" else TESTS
         tests = expand_tests(args.tests, args.all, available_tests)
-        suites = expand_suites(args.only)
+        suites = filter_suites_for_kind(expand_suites(args.only), args.kind)
     except ValueError as error:
         print(error, file=sys.stderr)
         return 2
