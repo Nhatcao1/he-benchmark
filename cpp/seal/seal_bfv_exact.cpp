@@ -92,6 +92,8 @@ namespace
         }
 
         const auto elapsed_ms = timer.elapsed_ms();
+        const auto ops_per_sec = elapsed_ms > 0.0 ? 1000.0 / elapsed_ms : 0.0;
+        const auto values_per_sec = ops_per_sec * static_cast<double>(rows.size());
         const auto decoded = decrypt_decode(decryptor, encoder, result);
 
         // Compare after decrypt/decode to keep benchmark output self-checking.
@@ -106,7 +108,11 @@ namespace
             << ",size=" << rows.size()
             << ",ring_size=" << ring_size
             << ",correct=" << (correct ? "true" : "false")
-            << ",latency_ms=" << elapsed_ms;
+            << ",latency_ms=" << elapsed_ms
+            // Throughput is derived from the timed operation latency. values/s
+            // counts active packed slots, not the encoder's zero-padded slots.
+            << ",ops_per_sec=" << ops_per_sec
+            << ",values_per_sec=" << values_per_sec;
 
         if (!correct)
         {
