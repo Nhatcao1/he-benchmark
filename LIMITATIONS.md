@@ -38,6 +38,10 @@ SEAL/OpenFHE benchmark suite. It is not a bug log.
 ## BFV Rotation Semantics
 
 - BFV rotation correctness is checked with library-specific packing semantics.
+- Rotation tests do not technically require exact tests to run first, but exact
+  BFV should be treated as the sanity prerequisite because both groups depend on
+  the same key generation, encoding, encryption, decryption, and slot comparison
+  assumptions.
 - SEAL `BatchEncoder` rotation is modeled as row-wise rotation over its padded
   two-row batching layout.
 - OpenFHE BFV rotation is also checked row-wise over the effective half-ring
