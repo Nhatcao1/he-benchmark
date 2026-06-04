@@ -28,8 +28,8 @@ cpp/results/openfhe_threads6.csv
 All report rows use the same format:
 
 ```text
-test=quick8,threads=1,library=SEAL,scheme=BFV,operation=add,size=8,ring_size=8192,correct=true,latency_ms=...,ops_per_sec=...,values_per_sec=...
-test=quick8,threads=6,library=OpenFHE,scheme=BFV,operation=add,size=8,ring_size=8192,correct=true,latency_ms=...,ops_per_sec=...,values_per_sec=...
+started_unix=...,started_utc=...,test=quick8,threads=1,library=SEAL,scheme=BFV,operation=add,size=8,ring_size=8192,correct=true,latency_ms=...,ops_per_sec=...,values_per_sec=...
+started_unix=...,started_utc=...,test=quick8,threads=6,library=OpenFHE,scheme=BFV,operation=add,size=8,ring_size=8192,correct=true,latency_ms=...,ops_per_sec=...,values_per_sec=...
 ```
 
 For current BFV exact primitive rows:
@@ -54,19 +54,19 @@ cmake --build cpp/build --target seal_bfv_exact openfhe_bfv_exact
 
 | Report criterion | Specific test | Scheme scope | Current status | Command / evidence |
 | --- | --- | --- | --- | --- |
-| Encode | Encode vector to plaintext | BFV, BGV, CKKS | Planned | Not timed separately yet |
-| Decode | Decode plaintext to vector | BFV, BGV, CKKS | Planned | Not timed separately yet |
-| Key generation | Generate secret key and public key | BFV, BGV, CKKS | Planned | Currently setup inside BFV exact run, not reported separately |
-| Relinearization-key generation | Generate relinearization key | BFV, BGV, CKKS | Planned | Currently setup inside BFV exact run, not reported separately |
+| Encode | Encode vector to plaintext | BFV, BGV, CKKS | Implemented for BFV exact | Reports `operation=encode`, `latency_ms`, `ops_per_sec`, `values_per_sec`, `byte_size` |
+| Decode | Decode plaintext to vector | BFV, BGV, CKKS | Implemented for BFV exact | Reports `operation=decode`, `latency_ms`, `ops_per_sec`, `values_per_sec` |
+| Key generation | Generate secret key and public key | BFV, BGV, CKKS | Implemented for BFV exact | Reports `operation=keygen`, `secret_key_bytes`, `public_key_bytes` |
+| Relinearization-key generation | Generate relinearization key | BFV, BGV, CKKS | Implemented for BFV exact | Reports `operation=relin_keygen`, `byte_size` |
 | Rotation-key generation | Generate Galois/rotation keys for +1, -1, +8 | BFV, BGV, CKKS | Planned | No rotation runner yet |
-| Encryption | Encrypt plaintext to ciphertext | BFV, BGV, CKKS | Planned | Currently setup inside BFV exact run, not reported separately |
-| Decryption | Decrypt ciphertext to plaintext | BFV, BGV, CKKS | Planned | Used for correctness, not reported separately |
+| Encryption | Encrypt plaintext to ciphertext | BFV, BGV, CKKS | Implemented for BFV exact | Reports `operation=encrypt`, `latency_ms`, `ops_per_sec`, `values_per_sec`, `byte_size` |
+| Decryption | Decrypt ciphertext to plaintext | BFV, BGV, CKKS | Implemented for BFV exact | Reports `operation=decrypt`, `latency_ms`, `ops_per_sec`, `values_per_sec` |
 | Addition ct-ct | `Enc(a) + Enc(b)` | BFV, BGV, CKKS | Implemented for BFV | Reports `latency_ms`, `ops_per_sec`, `values_per_sec`; run `./run_benchmarks.py --tests quick8 --ring-size 8192` |
 | Subtraction ct-ct | `Enc(a) - Enc(b)` | BFV, BGV, CKKS | Implemented for BFV | Reports `latency_ms`, `ops_per_sec`, `values_per_sec`; run `./run_benchmarks.py --tests quick8 --ring-size 8192` |
-| Addition ct-pt | `Enc(a) + b` | BFV, BGV, CKKS | Planned | No ct-pt operation runner yet |
-| Subtraction ct-pt | `Enc(a) - b` | BFV, BGV, CKKS | Planned | No ct-pt operation runner yet |
+| Addition ct-pt | `Enc(a) + b` | BFV, BGV, CKKS | Implemented for BFV exact | Reports `operation=add_plain`, `latency_ms`, `ops_per_sec`, `values_per_sec`, `byte_size` |
+| Subtraction ct-pt | `Enc(a) - b` | BFV, BGV, CKKS | Implemented for BFV exact | Reports `operation=sub_plain`, `latency_ms`, `ops_per_sec`, `values_per_sec`, `byte_size` |
 | Multiplication ct-ct | `Enc(a) * Enc(b)` | BFV, BGV, CKKS | Implemented for BFV | Reports `latency_ms`, `ops_per_sec`, `values_per_sec`; run `./run_benchmarks.py --tests quick8 --ring-size 8192` |
-| Multiplication ct-pt | `Enc(a) * b` | BFV, BGV, CKKS | Planned | No ct-pt operation runner yet |
+| Multiplication ct-pt | `Enc(a) * b` | BFV, BGV, CKKS | Implemented for BFV exact | Reports `operation=mul_plain`, `latency_ms`, `ops_per_sec`, `values_per_sec`, `byte_size` |
 | Square | `Enc(a)^2` | BFV, BGV, CKKS | Implemented for BFV | Reports `latency_ms`, `ops_per_sec`, `values_per_sec`; run `./run_benchmarks.py --tests quick8 --ring-size 8192` |
 | Negate | `-Enc(a)` | BFV, BGV, CKKS | Implemented for BFV | Reports `latency_ms`, `ops_per_sec`, `values_per_sec`; run `./run_benchmarks.py --tests quick8 --ring-size 8192` |
 | Relinearization | Multiply, measure size, relin, measure size | BFV, BGV, CKKS | Partial for BFV | BFV multiply/square call relin, but size-before/after is not reported yet |

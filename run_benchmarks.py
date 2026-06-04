@@ -13,6 +13,8 @@ import argparse
 import os
 import subprocess
 import sys
+import time
+from datetime import datetime, timezone
 from pathlib import Path
 
 
@@ -204,6 +206,8 @@ def main() -> int:
             # The C++ executable emits one CSV-style line per BFV operation.
             # Preserve those lines and annotate the selected corpus test and
             # thread count in the same format for all reports.
+            started_unix = time.time()
+            started_iso = datetime.fromtimestamp(started_unix, tz=timezone.utc).isoformat()
             completed = subprocess.run(
                 command,
                 cwd=ROOT,
@@ -221,7 +225,11 @@ def main() -> int:
 
             for line in completed.stdout.splitlines():
                 if line.strip():
-                    output_by_suite[suite_name].append(f"test={test_name},threads={threads},{line}")
+                    output_by_suite[suite_name].append(
+                        f"started_unix={started_unix:.6f},"
+                        f"started_utc={started_iso},"
+                        f"test={test_name},threads={threads},{line}"
+                    )
 
     if args.dry_run:
         return 0

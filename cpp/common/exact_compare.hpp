@@ -15,6 +15,9 @@ namespace hebench
         add,
         sub,
         mul,
+        add_plain,
+        sub_plain,
+        mul_plain,
         square_a,
         negate_a,
     };
@@ -56,10 +59,13 @@ namespace hebench
         switch (operation)
         {
         case ExactOperation::add:
+        case ExactOperation::add_plain:
             return row.expected_add;
         case ExactOperation::sub:
+        case ExactOperation::sub_plain:
             return row.expected_sub;
         case ExactOperation::mul:
+        case ExactOperation::mul_plain:
             return row.expected_mul;
         case ExactOperation::square_a:
             return row.expected_square_a;
@@ -80,6 +86,12 @@ namespace hebench
             return "sub";
         case ExactOperation::mul:
             return "mul";
+        case ExactOperation::add_plain:
+            return "add_plain";
+        case ExactOperation::sub_plain:
+            return "sub_plain";
+        case ExactOperation::mul_plain:
+            return "mul_plain";
         case ExactOperation::square_a:
             return "square_a";
         case ExactOperation::negate_a:
