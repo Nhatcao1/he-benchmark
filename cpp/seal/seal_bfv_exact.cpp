@@ -301,6 +301,68 @@ namespace
                 (correct ? "" : ",error=\"" + error + "\""));
         return correct;
     }
+
+    bool run_mod_switch(
+        seal::Evaluator &evaluator,
+        seal::Decryptor &decryptor,
+        seal::BatchEncoder &encoder,
+        const seal::SEALContext &context,
+        const std::vector<hebench::ExactRow> &rows,
+        const seal::Ciphertext &encrypted_a,
+        std::uint64_t plain_modulus,
+        std::size_t ring_size)
+    {
+        const auto context_before = context.get_context_data(encrypted_a.parms_id());
+        if (context_before == nullptr || context_before->next_context_data() == nullptr)
+        {
+            print_metric_row(
+                "mod_switch",
+                rows.size(),
+                ring_size,
+                true,
+                0.0,
+                0.0,
+                rows.size(),
+                serialized_size(encrypted_a),
+                "supported=false,reason=\"no_lower_modulus_level\"");
+            return true;
+        }
+
+        const auto level_before = context_before->chain_index();
+        const auto size_before_bytes = serialized_size(encrypted_a);
+
+        seal::Ciphertext switched;
+        const hebench::Timer timer;
+        evaluator.mod_switch_to_next(encrypted_a, switched);
+        const auto elapsed_ms = timer.elapsed_ms();
+
+        const auto context_after = context.get_context_data(switched.parms_id());
+        const auto level_after = context_after == nullptr ? 0 : context_after->chain_index();
+        const auto size_after_bytes = serialized_size(switched);
+        const auto components_after = switched.size();
+        const auto decoded = decrypt_decode(decryptor, encoder, switched);
+
+        std::string error;
+        const bool correct = compare_input_slots(decoded, rows, false, plain_modulus, error);
+        print_metric_row(
+            "mod_switch",
+            rows.size(),
+            ring_size,
+            correct,
+            elapsed_ms,
+            1.0,
+            rows.size(),
+            size_after_bytes,
+            "size_before_bytes=" + std::to_string(size_before_bytes) +
+                ",size_after_bytes=" + std::to_string(size_after_bytes) +
+                ",level_before=" + std::to_string(level_before) +
+                ",level_after=" + std::to_string(level_after) +
+                ",levels_dropped=" + std::to_string(level_before >= level_after ? level_before - level_after : 0) +
+                ",components_after=" + std::to_string(components_after) +
+                ",supported=true" +
+                (correct ? "" : ",error=\"" + error + "\""));
+        return correct;
+    }
 }
 
 int main(int argc, char **argv)
@@ -458,6 +520,16 @@ int main(int argc, char **argv)
         // Keep operations in a fixed order so result logs are easy to diff
         // across SEAL/OpenFHE and across parameter changes.
         bool all_correct = true;
+        all_correct = run_mod_switch(
+            evaluator,
+            decryptor,
+            encoder,
+            context,
+            rows,
+            encrypted_a,
+            plain_modulus,
+            args.ring_size) && all_correct;
+
         all_correct = run_relinearization(
             evaluator,
             decryptor,

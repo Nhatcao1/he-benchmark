@@ -58,6 +58,16 @@ SEAL/OpenFHE benchmark suite. It is not a bug log.
   operation timing and correctness status, not by assuming identical slot-index
   movement across SEAL and OpenFHE.
 
+## BFV Modulus Switching
+
+- SEAL BFV supports `mod_switch_to_next` in the current exact runner and reports
+  `operation=mod_switch`.
+- OpenFHE BFV rows report `operation=mod_switch,supported=false` because
+  OpenFHE's public `ModReduce` / `LevelReduce` APIs are documented for BGV and
+  CKKS rather than BFV.
+- Treat OpenFHE BFV mod-switch rows as a recorded library/scheme limitation, not
+  as a failed correctness result.
+
 ## Current Scope
 
 - Current implemented scheme scope is BFV exact primitive benchmarking and BFV

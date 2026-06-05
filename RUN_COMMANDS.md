@@ -83,7 +83,7 @@ cmake --build cpp/build --target seal_bfv_exact openfhe_bfv_exact
 | Negate | `-Enc(a)` | BFV, BGV, CKKS | Implemented for BFV | Reports `latency_ms`, `ops_per_sec`, `values_per_sec`; run `./run_benchmarks.py --tests quick8 --ring-size 8192` |
 | Relinearization | Multiply, measure size, relin, measure size | BFV, BGV, CKKS | Implemented for BFV exact | Reports `operation=relin`, `latency_ms`, `components_before`, `components_after`, `reduction_ratio`; SEAL also reports `size_before_bytes` and `size_after_bytes` |
 | Rotate slots | Rotate packed vector +1, -1, +8 slots | BFV, BGV, CKKS | Implemented for BFV | Run `./run_benchmarks.py --kind rotation --all --ring-size 8192`; reports `rotate_1`, `rotate_-1`, `rotate_8` |
-| Modulus switching | Drop ciphertext to one lower modulus level | BFV, BGV | Planned | No modulus-switch runner yet |
+| Modulus switching | Drop ciphertext to one lower modulus level | BFV, BGV | Partial for BFV | SEAL reports `operation=mod_switch`; OpenFHE BFV reports `supported=false` because OpenFHE documents ModReduce/LevelReduce for BGV/CKKS |
 | CKKS rescaling | Multiply, relin, rescale | CKKS | Planned | CKKS runner not implemented yet |
 | Exact correctness | Encrypt, compute, decrypt, validate | BFV, BGV | Implemented for BFV | `./run_benchmarks.py --all --ring-size 8192` |
 | CKKS numerical accuracy | Encrypt, compute, decrypt, compare baseline | CKKS | Planned | CKKS corpus exists, no runner yet |
@@ -159,6 +159,21 @@ Relin pass criteria:
 No correct=false rows.
 Relin rows show components_before=3 and components_after=2.
 SEAL rows also show size_before_bytes, size_after_bytes, and reduction_ratio.
+```
+
+SEAL BFV modulus switching is also included in the exact BFV runner:
+
+```bash
+./run_benchmarks.py --all --ring-size 8192 --out-dir cpp/results/bfv_exact8192
+grep -R "operation=mod_switch" cpp/results/bfv_exact8192
+```
+
+Mod-switch interpretation:
+
+```text
+SEAL rows show supported=true, level_before, level_after, and levels_dropped.
+OpenFHE BFV rows show supported=false because OpenFHE's public ModReduce /
+LevelReduce APIs are documented for BGV/CKKS rather than BFV.
 ```
 
 Run BFV rotation correctness:

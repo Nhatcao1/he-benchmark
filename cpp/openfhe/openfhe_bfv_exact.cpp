@@ -292,6 +292,28 @@ namespace
                 (correct ? "" : ",error=\"" + error + "\""));
         return correct;
     }
+
+    bool run_mod_switch(
+        const std::vector<hebench::ExactRow> &rows,
+        const lbcrypto::Ciphertext<lbcrypto::DCRTPoly> &encrypted_a,
+        std::size_t ring_size)
+    {
+        print_metric_row(
+            "mod_switch",
+            rows.size(),
+            ring_size,
+            true,
+            0.0,
+            0.0,
+            rows.size(),
+            0,
+            "supported=false,reason=\"OpenFHE ModReduce/LevelReduce are documented for BGV/CKKS, not BFV\"" +
+                std::string(",level_before=") + std::to_string(encrypted_a->GetLevel()) +
+                ",level_after=" + std::to_string(encrypted_a->GetLevel()) +
+                ",levels_dropped=0" +
+                ",components_after=" + std::to_string(encrypted_a->NumberCiphertextElements()));
+        return true;
+    }
 }
 
 int main(int argc, char **argv)
@@ -442,6 +464,11 @@ int main(int argc, char **argv)
         // Keep operation order aligned with the SEAL runner so output files can
         // be diffed or joined by operation name.
         bool all_correct = true;
+        all_correct = run_mod_switch(
+            rows,
+            encrypted_a,
+            args.ring_size) && all_correct;
+
         all_correct = run_relinearization(
             crypto_context,
             keys.secretKey,
