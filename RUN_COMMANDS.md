@@ -144,6 +144,23 @@ No correct=false rows.
 Rows include ops_per_sec and values_per_sec.
 ```
 
+Relinearization is included in the exact BFV runner. There is no separate
+`--kind relin` command. Run exact BFV, then inspect `operation=relin` rows:
+
+```bash
+./run_benchmarks.py --all --ring-size 8192 --out-dir cpp/results/bfv_exact8192
+grep -R "correct=false" cpp/results/bfv_exact8192
+grep -R "operation=relin" cpp/results/bfv_exact8192
+```
+
+Relin pass criteria:
+
+```text
+No correct=false rows.
+Relin rows show components_before=3 and components_after=2.
+SEAL rows also show size_before_bytes, size_after_bytes, and reduction_ratio.
+```
+
 Run BFV rotation correctness:
 
 ```bash
