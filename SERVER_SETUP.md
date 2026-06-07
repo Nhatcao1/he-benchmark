@@ -62,7 +62,7 @@ cmake -S cpp -B cpp/build \
   -DCMAKE_BUILD_TYPE=Release \
   -DHE_BENCHMARK_BUILD_OPENFHE=ON
 
-cmake --build cpp/build --target seal_bfv_exact seal_bfv_rotation seal_bfv_serialization openfhe_bfv_exact openfhe_bfv_rotation openfhe_bfv_serialization -j"$(nproc)"
+cmake --build cpp/build -j"$(nproc)"
 ```
 
 ## 6. Run Benchmarks
@@ -71,6 +71,24 @@ Run every exact BFV corpus test for both libraries using ring size 8192:
 
 ```bash
 ./run_benchmarks.py --all --ring-size 8192
+```
+
+Run every exact BGV corpus test for both libraries using ring size 8192:
+
+```bash
+./run_benchmarks.py --scheme bgv --all --ring-size 8192
+```
+
+Run CKKS approximate primitive tests for both libraries using ring size 8192:
+
+```bash
+./run_benchmarks.py --scheme ckks --all --ring-size 8192
+```
+
+Run the 8192-row CKKS corpora with ring size 16384 because CKKS has `ring_size / 2` packed slots:
+
+```bash
+./run_benchmarks.py --scheme ckks --tests normal8192,small8192,nearzero8192,mixed8192 --ring-size 16384
 ```
 
 Run BFV rotation tests (ring size 8192 required):
@@ -85,6 +103,85 @@ Run BFV serialization tests:
 ./run_benchmarks.py --kind serialization --tests quick8,256,edge --ring-size 8192
 ```
 
+Run BGV and CKKS serialization tests:
+
+```bash
+./run_benchmarks.py --kind serialization --scheme bgv --tests quick8,256,edge --ring-size 8192
+./run_benchmarks.py --kind serialization --scheme ckks --tests quick8,normal256 --ring-size 8192
+```
+
+Run multiplicative-depth tests:
+
+```bash
+./run_benchmarks.py --kind depth --scheme bfv --tests quick8 --ring-size 8192 --max-depth 4
+./run_benchmarks.py --kind depth --scheme bgv --tests quick8 --ring-size 8192 --max-depth 4
+./run_benchmarks.py --kind depth --scheme ckks --tests quick8 --ring-size 8192 --max-depth 4
+```
+
+Depth runs report the first failed level if the parameter set runs out of
+noise/levels. For this benchmark group, a later `correct=false` row is a
+measured saturation point, not necessarily a setup failure.
+
+Run end-to-end dot-product workloads:
+
+```bash
+./run_benchmarks.py --kind workload --scheme bfv --tests quick8 --ring-size 8192
+./run_benchmarks.py --kind workload --scheme bgv --tests quick8 --ring-size 8192
+./run_benchmarks.py --kind workload --scheme ckks --tests quick8 --ring-size 8192
+```
+
+Run memory benchmarks:
+
+```bash
+./run_benchmarks.py --kind memory --scheme bfv --tests quick8 --ring-size 8192
+./run_benchmarks.py --kind memory --scheme bgv --tests quick8 --ring-size 8192
+./run_benchmarks.py --kind memory --scheme ckks --tests quick8 --ring-size 8192
+```
+
+Run separate OpenFHE thread-scaling benchmarks:
+
+```bash
+./run_benchmarks.py --thread-scaling --kind workload --scheme bfv --tests quick8 --ring-size 8192 --out-dir cpp/results/thread_scaling_bfv
+./run_benchmarks.py --thread-scaling --kind workload --scheme bgv --tests quick8 --ring-size 8192 --out-dir cpp/results/thread_scaling_bgv
+./run_benchmarks.py --thread-scaling --kind workload --scheme ckks --tests quick8 --ring-size 8192 --out-dir cpp/results/thread_scaling_ckks
+```
+
+When investigating suspicious thread scaling, run repeated full-process
+measurements:
+
+```bash
+./run_benchmarks.py --thread-scaling --scheme bfv --tests 8192 --ring-size 8192 --warmups 1 --repetitions 5 --out-dir cpp/results/thread_scaling_bfv8192_repeat
+```
+
+OpenFHE child processes are launched with `OMP_NUM_THREADS`, `OMP_DYNAMIC=FALSE`,
+`OMP_PROC_BIND=close`, and `OMP_PLACES=cores`. Compare medians across
+`repeat=1..5` rather than relying on a single recorded row.
+
+Run advanced benchmark groups:
+
+```bash
+./run_benchmarks.py --kind ntt --scheme lowlevel --tests quick8 --ring-size 8192 --out-dir cpp/results/ntt
+./run_benchmarks.py --kind poly --scheme lowlevel --tests quick8 --ring-size 8192 --out-dir cpp/results/poly
+./run_benchmarks.py --kind keyswitch --scheme bfv --tests quick8 --ring-size 8192 --out-dir cpp/results/keyswitch_bfv
+./run_benchmarks.py --kind keyswitch --scheme bgv --tests quick8 --ring-size 8192 --out-dir cpp/results/keyswitch_bgv
+./run_benchmarks.py --kind keyswitch --scheme ckks --tests quick8 --ring-size 8192 --out-dir cpp/results/keyswitch_ckks
+./run_benchmarks.py --kind matrix --scheme ckks --all --ring-size 8192 --out-dir cpp/results/matrix_ckks
+./run_benchmarks.py --kind heap --scheme bfv --tests quick8 --ring-size 8192 --out-dir cpp/results/heap_bfv
+./run_benchmarks.py --kind footprint --scheme bfv --tests quick8 --ring-size 8192 --out-dir cpp/results/footprint_bfv
+./run_benchmarks.py --kind corpus-memory --scheme bfv --tests 256 --ring-size 8192 --out-dir cpp/results/corpus_memory_bfv
+./run_benchmarks.py --thread-scaling --kind thread-memory --scheme bfv --tests quick8 --ring-size 8192 --out-dir cpp/results/thread_memory_bfv
+./run_benchmarks.py --kind cpu --scheme bfv --tests quick8 --ring-size 8192 --out-dir cpp/results/cpu_bfv
+```
+
+SEAL key-switch rows intentionally report `supported=false` because SEAL does
+not expose generic public key-to-key switching. OpenFHE key-switch rows use
+OpenFHE's public `KeySwitchGen` and `KeySwitch` APIs.
+
+The default comparison remains SEAL vs OpenFHE one-thread vs OpenFHE
+six-thread. `--thread-scaling` is OpenFHE-only and writes files for
+`OMP_NUM_THREADS=1,2,4,6,8`. Use it for scaling plots instead of mixing many
+OpenFHE thread counts into the normal SEAL/OpenFHE comparison.
+
 This writes three separate reports:
 
 ```text
@@ -97,8 +194,18 @@ cpp/results/openfhe_threads6.csv
 thread. `openfhe_threads6.csv` is the same OpenFHE benchmark with
 `OMP_NUM_THREADS=6`.
 
-Each report uses the same CSV-style row format. The runner adds `test=...` and
-`threads=...` so the files can be compared directly.
+Thread-scaling report files use names such as:
+
+```text
+cpp/results/thread_scaling_bfv/openfhe_threads1_scaling_workload.csv
+cpp/results/thread_scaling_bfv/openfhe_threads2_scaling_workload.csv
+cpp/results/thread_scaling_bfv/openfhe_threads4_scaling_workload.csv
+cpp/results/thread_scaling_bfv/openfhe_threads6_scaling_workload.csv
+cpp/results/thread_scaling_bfv/openfhe_threads8_scaling_workload.csv
+```
+
+Each report uses the same CSV-style row format. The runner adds `test=...`,
+`threads=...`, and `repeat=...` so the files can be compared directly.
 
 Run a smaller subset while debugging:
 
@@ -126,6 +233,34 @@ only when debugging a specific executable:
 ```bash
 ./cpp/build/seal_bfv_exact --corpus he_corpus/exact/exact_safe_000008.csv --ring-size 8192
 ./cpp/build/openfhe_bfv_exact --corpus he_corpus/exact/exact_safe_000008.csv --ring-size 8192
+./cpp/build/seal_bgv_exact --corpus he_corpus/exact/exact_safe_000008.csv --ring-size 8192
+./cpp/build/openfhe_bgv_exact --corpus he_corpus/exact/exact_safe_000008.csv --ring-size 8192
+./cpp/build/seal_ckks --corpus he_corpus/ckks_normal/ckks_normal_000008.csv --ring-size 8192
+./cpp/build/openfhe_ckks --corpus he_corpus/ckks_normal/ckks_normal_000008.csv --ring-size 8192
+./cpp/build/seal_bfv_depth --corpus he_corpus/depth/exact_depth_000008.csv --ring-size 8192 --max-depth 4
+./cpp/build/openfhe_bgv_depth --corpus he_corpus/depth/exact_depth_000008.csv --ring-size 8192 --max-depth 4
+./cpp/build/seal_ckks_depth --corpus he_corpus/depth/ckks_depth_000008.csv --ring-size 8192 --max-depth 4
+./cpp/build/openfhe_ckks_depth --corpus he_corpus/depth/ckks_depth_000008.csv --ring-size 8192 --max-depth 4
+./cpp/build/seal_bgv_serialization --corpus he_corpus/exact/exact_safe_000008.csv --ring-size 8192
+./cpp/build/openfhe_bgv_serialization --corpus he_corpus/exact/exact_safe_000008.csv --ring-size 8192
+./cpp/build/seal_ckks_serialization --corpus he_corpus/ckks_normal/ckks_normal_000008.csv --ring-size 8192
+./cpp/build/openfhe_ckks_serialization --corpus he_corpus/ckks_normal/ckks_normal_000008.csv --ring-size 8192
+./cpp/build/seal_bfv_dot --corpus he_corpus/exact/exact_safe_000008.csv --ring-size 8192
+./cpp/build/openfhe_bgv_dot --corpus he_corpus/exact/exact_safe_000008.csv --ring-size 8192
+./cpp/build/seal_ckks_dot --corpus he_corpus/ckks_normal/ckks_normal_000008.csv --ring-size 8192
+./cpp/build/openfhe_ckks_dot --corpus he_corpus/ckks_normal/ckks_normal_000008.csv --ring-size 8192
+./cpp/build/seal_bfv_memory --corpus he_corpus/exact/exact_safe_000008.csv --ring-size 8192
+./cpp/build/openfhe_bgv_memory --corpus he_corpus/exact/exact_safe_000008.csv --ring-size 8192
+./cpp/build/seal_ckks_memory --corpus he_corpus/ckks_normal/ckks_normal_000008.csv --ring-size 8192
+./cpp/build/openfhe_ckks_memory --corpus he_corpus/ckks_normal/ckks_normal_000008.csv --ring-size 8192
+./cpp/build/seal_lowlevel_ntt --corpus he_corpus/exact/exact_safe_000008.csv --ring-size 8192
+./cpp/build/openfhe_lowlevel_ntt --corpus he_corpus/exact/exact_safe_000008.csv --ring-size 8192
+./cpp/build/seal_bfv_keyswitch --corpus he_corpus/exact/exact_safe_000008.csv --ring-size 8192
+./cpp/build/openfhe_bfv_keyswitch --corpus he_corpus/exact/exact_safe_000008.csv --ring-size 8192
+./cpp/build/seal_ckks_matrix --corpus he_corpus/matrices/matrix_a_0064x0064.csv --ring-size 8192
+./cpp/build/openfhe_ckks_matrix --corpus he_corpus/matrices/matrix_a_0064x0064.csv --ring-size 8192
+./cpp/build/seal_bfv_cpu --corpus he_corpus/exact/exact_safe_000008.csv --ring-size 8192
+./cpp/build/openfhe_bfv_cpu --corpus he_corpus/exact/exact_safe_000008.csv --ring-size 8192
 ```
 
 Each executable prints one CSV-style line per operation:
@@ -133,4 +268,17 @@ Each executable prints one CSV-style line per operation:
 ```text
 library=SEAL,scheme=BFV,operation=add,size=8,ring_size=8192,correct=true,latency_ms=...,ops_per_sec=...,values_per_sec=...
 library=OpenFHE,scheme=BFV,operation=add,size=8,ring_size=8192,correct=true,latency_ms=...,ops_per_sec=...,values_per_sec=...
+library=SEAL,scheme=BGV,operation=add,size=8,ring_size=8192,correct=true,latency_ms=...,ops_per_sec=...,values_per_sec=...
+library=OpenFHE,scheme=BGV,operation=add,size=8,ring_size=8192,correct=true,latency_ms=...,ops_per_sec=...,values_per_sec=...
+library=SEAL,scheme=CKKS,operation=add,size=8,ring_size=8192,correct=true,latency_ms=...,ops_per_sec=...,values_per_sec=...,mae=...,rmse=...,precision_bits=...
+library=OpenFHE,scheme=CKKS,operation=add,size=8,ring_size=8192,correct=true,latency_ms=...,ops_per_sec=...,values_per_sec=...,mae=...,rmse=...,precision_bits=...
+library=SEAL,scheme=BFV,operation=depth_mul,size=8,ring_size=8192,correct=true,latency_ms=...,ops_per_sec=...,values_per_sec=...,depth=1,max_depth=4,noise_budget_after_bits=...
+library=OpenFHE,scheme=CKKS,operation=depth_mul,size=8,ring_size=8192,correct=true,latency_ms=...,ops_per_sec=...,values_per_sec=...,depth=1,max_depth=4,mae=...,precision_bits=...
+library=SEAL,scheme=CKKS,operation=serialize_ciphertext,size=8,ring_size=8192,correct=true,latency_ms=...,byte_size=...,mb_per_sec=...,scale=...,level=...
+library=SEAL,scheme=BFV,operation=dot_product_e2e,size=8,ring_size=8192,correct=true,latency_ms=...,ops_per_sec=...,values_per_sec=...,rotations_count=...,expected=...,actual=...
+library=SEAL,scheme=BFV,operation=memory_keygen,size=8,ring_size=8192,correct=true,latency_ms=...,peak_rss_kb=...,delta_peak_rss_kb=...
+library=SEAL,scheme=LOWLEVEL,operation=ntt_forward,size=8192,ring_size=8192,correct=true,latency_ms=...,ops_per_sec=...,values_per_sec=...
+library=OpenFHE,scheme=BFV,operation=key_switch_apply,size=8,ring_size=8192,correct=true,latency_ms=...,ops_per_sec=...,values_per_sec=...
+library=SEAL,scheme=CKKS,operation=matrix_multiply_64x64_ctpt,size=4096,ring_size=8192,correct=true,latency_ms=...,max_abs_error=...,rmse=...
+library=SEAL,scheme=BFV,operation=resource_encrypt,size=8,ring_size=8192,correct=true,latency_ms=...,resource_mode=cpu,cpu_ms=...,cpu_utilization_pct=...
 ```

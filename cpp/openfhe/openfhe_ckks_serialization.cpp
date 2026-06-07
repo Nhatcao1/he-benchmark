@@ -1,3 +1,5 @@
+#include <cmath>
+#include <cstddef>
 #include <cstdint>
 #include <exception>
 #include <iostream>
@@ -9,72 +11,46 @@
 #include "ciphertext-ser.h"
 #include "cryptocontext-ser.h"
 #include "key/key-ser.h"
-#ifdef HE_BENCHMARK_OPENFHE_SERIALIZATION_BGV
-#include "scheme/bgvrns/bgvrns-ser.h"
-#else
-#include "scheme/bfvrns/bfvrns-ser.h"
-#endif
+#include "scheme/ckksrns/ckksrns-ser.h"
 
 #include "benchmark_args.hpp"
 #include "csv_reader.hpp"
-#include "exact_compare.hpp"
 #include "timer.hpp"
 
 namespace
 {
-    constexpr std::uint64_t kPlainModulus = 786433;
-    constexpr std::uint32_t kMultiplicativeDepth = 2;
+    constexpr std::uint32_t kMultiplicativeDepth = 3;
+    constexpr std::uint32_t kScaleModSize = 40;
 
-#ifdef HE_BENCHMARK_OPENFHE_SERIALIZATION_BGV
-    constexpr const char *kSchemeName = "BGV";
-    constexpr const char *kBinaryName = "openfhe_bgv_serialization";
-#else
-    constexpr const char *kSchemeName = "BFV";
-    constexpr const char *kBinaryName = "openfhe_bfv_serialization";
-#endif
-
-    std::vector<int64_t> encode_signed_inputs(
-        const std::vector<hebench::ExactRow> &rows,
+    std::vector<double> values_for(
+        const std::vector<hebench::CkksRow> &rows,
         bool use_b,
-        std::size_t slot_count,
-        std::uint64_t plain_modulus)
+        std::size_t slot_count)
     {
-        std::vector<int64_t> values(slot_count, 0);
+        std::vector<double> values(slot_count, 0.0);
         for (std::size_t i = 0; i < rows.size(); ++i)
         {
-            const auto value = use_b ? rows[i].b : rows[i].a;
-            values[i] = hebench::centered_mod(value, plain_modulus);
+            values[i] = use_b ? rows[i].b : rows[i].a;
         }
         return values;
     }
 
-    std::vector<std::uint64_t> decrypt_decode(
+    std::vector<double> decrypt_decode(
         lbcrypto::CryptoContext<lbcrypto::DCRTPoly> crypto_context,
         const lbcrypto::PrivateKey<lbcrypto::DCRTPoly> &private_key,
         const lbcrypto::Ciphertext<lbcrypto::DCRTPoly> &ciphertext,
-        std::uint64_t plain_modulus)
+        std::size_t length)
     {
         lbcrypto::Plaintext plaintext;
         crypto_context->Decrypt(private_key, ciphertext, &plaintext);
-
-        const auto &packed = plaintext->GetPackedValue();
-        std::vector<std::uint64_t> decoded;
-        decoded.reserve(packed.size());
-        for (const auto value : packed)
-        {
-            const auto centered = hebench::centered_mod(value, plain_modulus);
-            decoded.push_back(centered < 0
-                ? static_cast<std::uint64_t>(centered + static_cast<std::int64_t>(plain_modulus))
-                : static_cast<std::uint64_t>(centered));
-        }
-        return decoded;
+        plaintext->SetLength(length);
+        return plaintext->GetRealPackedValue();
     }
 
-    bool compare_input_slots(
-        const std::vector<std::uint64_t> &actual,
-        const std::vector<hebench::ExactRow> &rows,
+    bool compare_input(
+        const std::vector<double> &actual,
+        const std::vector<hebench::CkksRow> &rows,
         bool use_b,
-        std::uint64_t plain_modulus,
         std::string &error)
     {
         if (actual.size() < rows.size())
@@ -82,19 +58,16 @@ namespace
             error = "decoded slot count is smaller than corpus row count";
             return false;
         }
-
         for (std::size_t i = 0; i < rows.size(); ++i)
         {
-            const auto expected = hebench::centered_mod(use_b ? rows[i].b : rows[i].a, plain_modulus);
-            const auto decoded = hebench::centered_mod_u64(actual[i], plain_modulus);
-            if (decoded != expected)
+            const auto expected = use_b ? rows[i].b : rows[i].a;
+            if (std::abs(actual[i] - expected) > 1e-3)
             {
                 error = "slot " + std::to_string(i) + " expected " + std::to_string(expected) +
-                    " got " + std::to_string(decoded);
+                    " got " + std::to_string(actual[i]);
                 return false;
             }
         }
-
         error.clear();
         return true;
     }
@@ -140,6 +113,7 @@ namespace
         bool correct,
         double elapsed_ms,
         std::size_t byte_size,
+        const std::string &extra = "",
         const std::string &error = "")
     {
         const auto ops_per_sec = elapsed_ms > 0.0 ? 1000.0 / elapsed_ms : 0.0;
@@ -149,7 +123,7 @@ namespace
 
         std::cout
             << "library=OpenFHE"
-            << ",scheme=" << kSchemeName
+            << ",scheme=CKKS"
             << ",operation=" << operation
             << ",size=" << size
             << ",ring_size=" << ring_size
@@ -159,6 +133,10 @@ namespace
             << ",values_per_sec=0"
             << ",byte_size=" << byte_size
             << ",mb_per_sec=" << mb_per_sec;
+        if (!extra.empty())
+        {
+            std::cout << ',' << extra;
+        }
         if (!correct)
         {
             std::cout << ",error=\"" << error << "\"";
@@ -178,25 +156,21 @@ int main(int argc, char **argv)
             return 0;
         }
 
-        const auto rows = hebench::read_exact_csv(args.corpus_path);
+        const auto rows = hebench::read_ckks_csv(args.corpus_path);
         if (rows.empty())
         {
             throw std::runtime_error("corpus has no rows: " + args.corpus_path);
         }
-        if (rows.size() > args.ring_size)
+        if (rows.size() > args.ring_size / 2)
         {
-            throw std::runtime_error(std::string("corpus row count exceeds OpenFHE ") + kSchemeName + " batch size");
+            throw std::runtime_error("corpus row count exceeds OpenFHE CKKS batch size");
         }
 
-#ifdef HE_BENCHMARK_OPENFHE_SERIALIZATION_BGV
-        lbcrypto::CCParams<lbcrypto::CryptoContextBGVRNS> parameters;
-#else
-        lbcrypto::CCParams<lbcrypto::CryptoContextBFVRNS> parameters;
-#endif
-        parameters.SetPlaintextModulus(kPlainModulus);
+        lbcrypto::CCParams<lbcrypto::CryptoContextCKKSRNS> parameters;
         parameters.SetMultiplicativeDepth(kMultiplicativeDepth);
+        parameters.SetScalingModSize(kScaleModSize);
         parameters.SetRingDim(static_cast<std::uint32_t>(args.ring_size));
-        parameters.SetBatchSize(static_cast<std::uint32_t>(args.ring_size));
+        parameters.SetBatchSize(static_cast<std::uint32_t>(args.ring_size / 2));
 
         auto crypto_context = lbcrypto::GenCryptoContext(parameters);
         crypto_context->Enable(lbcrypto::PKE);
@@ -208,30 +182,31 @@ int main(int argc, char **argv)
         crypto_context->EvalMultKeyGen(keys.secretKey);
         crypto_context->EvalRotateKeyGen(keys.secretKey, {1, -1, 8});
 
-        const auto plain_a = crypto_context->MakePackedPlaintext(
-            encode_signed_inputs(rows, false, args.ring_size, kPlainModulus));
+        auto plain_a = crypto_context->MakeCKKSPackedPlaintext(values_for(rows, false, args.ring_size / 2));
         const auto encrypted_a = crypto_context->Encrypt(keys.publicKey, plain_a);
 
         bool all_correct = true;
         std::string bytes;
         std::string error;
+        const auto cipher_extra = "scale=" + std::to_string(encrypted_a->GetScalingFactor()) +
+            ",level=" + std::to_string(encrypted_a->GetLevel());
 
         auto serialize_ms = timed_serialize(encrypted_a, bytes);
-        print_row("serialize_ciphertext", rows.size(), args.ring_size, true, serialize_ms, bytes.size());
+        print_row("serialize_ciphertext", rows.size(), args.ring_size, true, serialize_ms, bytes.size(), cipher_extra);
         lbcrypto::Ciphertext<lbcrypto::DCRTPoly> loaded_ciphertext;
         auto deserialize_ms = timed_deserialize(bytes, loaded_ciphertext);
-        const auto decoded_ciphertext = decrypt_decode(crypto_context, keys.secretKey, loaded_ciphertext, kPlainModulus);
-        auto correct = compare_input_slots(decoded_ciphertext, rows, false, kPlainModulus, error);
-        print_row("deserialize_ciphertext", rows.size(), args.ring_size, correct, deserialize_ms, bytes.size(), error);
+        const auto decoded_ciphertext = decrypt_decode(crypto_context, keys.secretKey, loaded_ciphertext, rows.size());
+        auto correct = compare_input(decoded_ciphertext, rows, false, error);
+        print_row("deserialize_ciphertext", rows.size(), args.ring_size, correct, deserialize_ms, bytes.size(), cipher_extra, error);
         all_correct = correct && all_correct;
 
         serialize_ms = timed_serialize(keys.secretKey, bytes);
         print_row("serialize_secret_key", rows.size(), args.ring_size, true, serialize_ms, bytes.size());
         lbcrypto::PrivateKey<lbcrypto::DCRTPoly> loaded_secret_key;
         deserialize_ms = timed_deserialize(bytes, loaded_secret_key);
-        const auto decoded_secret = decrypt_decode(crypto_context, loaded_secret_key, encrypted_a, kPlainModulus);
-        correct = compare_input_slots(decoded_secret, rows, false, kPlainModulus, error);
-        print_row("deserialize_secret_key", rows.size(), args.ring_size, correct, deserialize_ms, bytes.size(), error);
+        const auto decoded_secret = decrypt_decode(crypto_context, loaded_secret_key, encrypted_a, rows.size());
+        correct = compare_input(decoded_secret, rows, false, error);
+        print_row("deserialize_secret_key", rows.size(), args.ring_size, correct, deserialize_ms, bytes.size(), "", error);
         all_correct = correct && all_correct;
 
         serialize_ms = timed_serialize(keys.publicKey, bytes);
@@ -239,9 +214,9 @@ int main(int argc, char **argv)
         lbcrypto::PublicKey<lbcrypto::DCRTPoly> loaded_public_key;
         deserialize_ms = timed_deserialize(bytes, loaded_public_key);
         const auto encrypted_with_loaded_public = crypto_context->Encrypt(loaded_public_key, plain_a);
-        const auto decoded_public = decrypt_decode(crypto_context, keys.secretKey, encrypted_with_loaded_public, kPlainModulus);
-        correct = compare_input_slots(decoded_public, rows, false, kPlainModulus, error);
-        print_row("deserialize_public_key", rows.size(), args.ring_size, correct, deserialize_ms, bytes.size(), error);
+        const auto decoded_public = decrypt_decode(crypto_context, keys.secretKey, encrypted_with_loaded_public, rows.size());
+        correct = compare_input(decoded_public, rows, false, error);
+        print_row("deserialize_public_key", rows.size(), args.ring_size, correct, deserialize_ms, bytes.size(), "", error);
         all_correct = correct && all_correct;
 
         serialize_ms = timed_context_key_serialize(
@@ -262,7 +237,7 @@ int main(int argc, char **argv)
     }
     catch (const std::exception &error)
     {
-        std::cerr << kBinaryName << " failed: " << error.what() << '\n';
+        std::cerr << "openfhe_ckks_serialization failed: " << error.what() << '\n';
         return 2;
     }
 }

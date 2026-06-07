@@ -10,6 +10,7 @@ namespace hebench
     {
         std::string corpus_path = "he_corpus/exact/exact_safe_000008.csv";
         std::size_t ring_size = 8192;
+        std::size_t max_depth = 4;
         bool show_help = false;
     };
 
@@ -62,6 +63,15 @@ namespace hebench
                 args.ring_size = parse_size_arg(argv[i], "--ring-size");
                 continue;
             }
+            if (option == "--max-depth")
+            {
+                if (++i >= argc)
+                {
+                    throw std::runtime_error("missing value for --max-depth");
+                }
+                args.max_depth = parse_size_arg(argv[i], "--max-depth");
+                continue;
+            }
             if (!option.empty() && option[0] == '-')
             {
                 throw std::runtime_error("unknown option: " + option);
@@ -77,6 +87,6 @@ namespace hebench
     inline std::string benchmark_usage(const std::string &program_name)
     {
         return "Usage: " + program_name +
-            " [--corpus he_corpus/exact/exact_safe_000008.csv] [--ring-size 8192]\n";
+            " [--corpus he_corpus/exact/exact_safe_000008.csv] [--ring-size 8192] [--max-depth 4]\n";
     }
 }

@@ -1,3 +1,5 @@
+#include <cmath>
+#include <cstddef>
 #include <cstdint>
 #include <exception>
 #include <iostream>
@@ -9,51 +11,62 @@
 
 #include "benchmark_args.hpp"
 #include "csv_reader.hpp"
-#include "exact_compare.hpp"
 #include "timer.hpp"
 
 namespace
 {
-    constexpr std::uint64_t kPlainModulusBitSize = 20;
+    constexpr double kScale = static_cast<double>(std::uint64_t{1} << 40);
 
-#ifdef HE_BENCHMARK_SEAL_SERIALIZATION_BGV
-    constexpr auto kScheme = seal::scheme_type::bgv;
-    constexpr const char *kSchemeName = "BGV";
-    constexpr const char *kBinaryName = "seal_bgv_serialization";
-#else
-    constexpr auto kScheme = seal::scheme_type::bfv;
-    constexpr const char *kSchemeName = "BFV";
-    constexpr const char *kBinaryName = "seal_bfv_serialization";
-#endif
-
-    std::vector<std::uint64_t> encode_signed_inputs(
-        const std::vector<hebench::ExactRow> &rows,
+    std::vector<double> values_for(
+        const std::vector<hebench::CkksRow> &rows,
         bool use_b,
-        std::size_t slot_count,
-        std::uint64_t plain_modulus)
+        std::size_t slot_count)
     {
-        std::vector<std::uint64_t> values(slot_count, 0ULL);
+        std::vector<double> values(slot_count, 0.0);
         for (std::size_t i = 0; i < rows.size(); ++i)
         {
-            const auto value = use_b ? rows[i].b : rows[i].a;
-            const auto centered = hebench::centered_mod(value, plain_modulus);
-            values[i] = centered < 0
-                ? static_cast<std::uint64_t>(centered + static_cast<std::int64_t>(plain_modulus))
-                : static_cast<std::uint64_t>(centered);
+            values[i] = use_b ? rows[i].b : rows[i].a;
         }
         return values;
     }
 
-    std::vector<std::uint64_t> decrypt_decode(
+    std::vector<double> decrypt_decode(
         seal::Decryptor &decryptor,
-        seal::BatchEncoder &encoder,
+        seal::CKKSEncoder &encoder,
         const seal::Ciphertext &ciphertext)
     {
         seal::Plaintext plain;
-        std::vector<std::uint64_t> decoded;
+        std::vector<double> decoded;
         decryptor.decrypt(ciphertext, plain);
         encoder.decode(plain, decoded);
         return decoded;
+    }
+
+    bool compare_input(
+        const std::vector<double> &actual,
+        const std::vector<hebench::CkksRow> &rows,
+        bool use_b,
+        std::string &error)
+    {
+        if (actual.size() < rows.size())
+        {
+            error = "decoded slot count is smaller than corpus row count";
+            return false;
+        }
+
+        for (std::size_t i = 0; i < rows.size(); ++i)
+        {
+            const auto expected = use_b ? rows[i].b : rows[i].a;
+            if (std::abs(actual[i] - expected) > 1e-3)
+            {
+                error = "slot " + std::to_string(i) + " expected " + std::to_string(expected) +
+                    " got " + std::to_string(actual[i]);
+                return false;
+            }
+        }
+
+        error.clear();
+        return true;
     }
 
     template <typename T>
@@ -81,35 +94,6 @@ namespace
         return timer.elapsed_ms();
     }
 
-    bool compare_input_slots(
-        const std::vector<std::uint64_t> &actual,
-        const std::vector<hebench::ExactRow> &rows,
-        bool use_b,
-        std::uint64_t plain_modulus,
-        std::string &error)
-    {
-        if (actual.size() < rows.size())
-        {
-            error = "decoded slot count is smaller than corpus row count";
-            return false;
-        }
-
-        for (std::size_t i = 0; i < rows.size(); ++i)
-        {
-            const auto expected = hebench::centered_mod(use_b ? rows[i].b : rows[i].a, plain_modulus);
-            const auto decoded = hebench::centered_mod_u64(actual[i], plain_modulus);
-            if (decoded != expected)
-            {
-                error = "slot " + std::to_string(i) + " expected " + std::to_string(expected) +
-                    " got " + std::to_string(decoded);
-                return false;
-            }
-        }
-
-        error.clear();
-        return true;
-    }
-
     void print_row(
         const std::string &operation,
         std::size_t size,
@@ -117,6 +101,7 @@ namespace
         bool correct,
         double elapsed_ms,
         std::size_t byte_size,
+        const std::string &extra = "",
         const std::string &error = "")
     {
         const auto ops_per_sec = elapsed_ms > 0.0 ? 1000.0 / elapsed_ms : 0.0;
@@ -126,7 +111,7 @@ namespace
 
         std::cout
             << "library=SEAL"
-            << ",scheme=" << kSchemeName
+            << ",scheme=CKKS"
             << ",operation=" << operation
             << ",size=" << size
             << ",ring_size=" << ring_size
@@ -136,6 +121,10 @@ namespace
             << ",values_per_sec=0"
             << ",byte_size=" << byte_size
             << ",mb_per_sec=" << mb_per_sec;
+        if (!extra.empty())
+        {
+            std::cout << ',' << extra;
+        }
         if (!correct)
         {
             std::cout << ",error=\"" << error << "\"";
@@ -155,16 +144,15 @@ int main(int argc, char **argv)
             return 0;
         }
 
-        const auto rows = hebench::read_exact_csv(args.corpus_path);
+        const auto rows = hebench::read_ckks_csv(args.corpus_path);
         if (rows.empty())
         {
             throw std::runtime_error("corpus has no rows: " + args.corpus_path);
         }
 
-        seal::EncryptionParameters parms(kScheme);
+        seal::EncryptionParameters parms(seal::scheme_type::ckks);
         parms.set_poly_modulus_degree(args.ring_size);
-        parms.set_coeff_modulus(seal::CoeffModulus::BFVDefault(args.ring_size));
-        parms.set_plain_modulus(seal::PlainModulus::Batching(args.ring_size, kPlainModulusBitSize));
+        parms.set_coeff_modulus(seal::CoeffModulus::Create(args.ring_size, {60, 40, 40, 60}));
 
         seal::SEALContext context(parms);
         if (!context.parameters_set())
@@ -172,12 +160,11 @@ int main(int argc, char **argv)
             throw std::runtime_error(context.parameter_error_message());
         }
 
-        seal::BatchEncoder encoder(context);
+        seal::CKKSEncoder encoder(context);
         const auto slot_count = encoder.slot_count();
-        const auto plain_modulus = parms.plain_modulus().value();
         if (rows.size() > slot_count)
         {
-            throw std::runtime_error(std::string("corpus row count exceeds SEAL ") + kSchemeName + " slot count");
+            throw std::runtime_error("corpus row count exceeds SEAL CKKS slot count");
         }
 
         seal::KeyGenerator keygen(context);
@@ -193,26 +180,24 @@ int main(int argc, char **argv)
         seal::Decryptor decryptor(context, secret_key);
 
         seal::Plaintext plain_a;
-        seal::Plaintext plain_b;
-        encoder.encode(encode_signed_inputs(rows, false, slot_count, plain_modulus), plain_a);
-        encoder.encode(encode_signed_inputs(rows, true, slot_count, plain_modulus), plain_b);
+        encoder.encode(values_for(rows, false, slot_count), kScale, plain_a);
 
         seal::Ciphertext encrypted_a;
-        seal::Ciphertext encrypted_b;
         encryptor.encrypt(plain_a, encrypted_a);
-        encryptor.encrypt(plain_b, encrypted_b);
 
         bool all_correct = true;
         std::string bytes;
         std::string error;
+        const auto cipher_extra = "scale=" + std::to_string(encrypted_a.scale()) +
+            ",level=" + std::to_string(encrypted_a.coeff_modulus_size());
 
         auto save_ms = timed_save(encrypted_a, bytes);
-        print_row("serialize_ciphertext", rows.size(), args.ring_size, true, save_ms, bytes.size());
+        print_row("serialize_ciphertext", rows.size(), args.ring_size, true, save_ms, bytes.size(), cipher_extra);
         seal::Ciphertext loaded_ciphertext;
         auto load_ms = timed_load(context, bytes, loaded_ciphertext);
         const auto decoded_ciphertext = decrypt_decode(decryptor, encoder, loaded_ciphertext);
-        auto correct = compare_input_slots(decoded_ciphertext, rows, false, plain_modulus, error);
-        print_row("deserialize_ciphertext", rows.size(), args.ring_size, correct, load_ms, bytes.size(), error);
+        auto correct = compare_input(decoded_ciphertext, rows, false, error);
+        print_row("deserialize_ciphertext", rows.size(), args.ring_size, correct, load_ms, bytes.size(), cipher_extra, error);
         all_correct = correct && all_correct;
 
         save_ms = timed_save(secret_key, bytes);
@@ -221,8 +206,8 @@ int main(int argc, char **argv)
         load_ms = timed_load(context, bytes, loaded_secret_key);
         seal::Decryptor loaded_decryptor(context, loaded_secret_key);
         const auto decoded_secret = decrypt_decode(loaded_decryptor, encoder, encrypted_a);
-        correct = compare_input_slots(decoded_secret, rows, false, plain_modulus, error);
-        print_row("deserialize_secret_key", rows.size(), args.ring_size, correct, load_ms, bytes.size(), error);
+        correct = compare_input(decoded_secret, rows, false, error);
+        print_row("deserialize_secret_key", rows.size(), args.ring_size, correct, load_ms, bytes.size(), "", error);
         all_correct = correct && all_correct;
 
         save_ms = timed_save(public_key, bytes);
@@ -233,8 +218,8 @@ int main(int argc, char **argv)
         seal::Ciphertext encrypted_with_loaded_public;
         loaded_encryptor.encrypt(plain_a, encrypted_with_loaded_public);
         const auto decoded_public = decrypt_decode(decryptor, encoder, encrypted_with_loaded_public);
-        correct = compare_input_slots(decoded_public, rows, false, plain_modulus, error);
-        print_row("deserialize_public_key", rows.size(), args.ring_size, correct, load_ms, bytes.size(), error);
+        correct = compare_input(decoded_public, rows, false, error);
+        print_row("deserialize_public_key", rows.size(), args.ring_size, correct, load_ms, bytes.size(), "", error);
         all_correct = correct && all_correct;
 
         save_ms = timed_save(relin_keys, bytes);
@@ -253,7 +238,7 @@ int main(int argc, char **argv)
     }
     catch (const std::exception &error)
     {
-        std::cerr << kBinaryName << " failed: " << error.what() << '\n';
+        std::cerr << "seal_ckks_serialization failed: " << error.what() << '\n';
         return 2;
     }
 }

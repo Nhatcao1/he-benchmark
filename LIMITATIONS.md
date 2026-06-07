@@ -25,13 +25,40 @@ SEAL/OpenFHE benchmark suite. It is not a bug log.
 - `--all` includes the `8192` corpus file, so smaller rings cannot pack all
   active slots.
 
+## CKKS Corpus Size vs Ring Size
+
+- CKKS packed slot capacity is `ring_size / 2`.
+- With `--ring-size 8192`, run CKKS files up to 4096 rows.
+- Use `--ring-size 16384` for `normal8192`, `small8192`, `nearzero8192`,
+  and `mixed8192`.
+- The same slot-capacity rule applies to `he_corpus/depth/ckks_depth_*.csv`.
+  The runner's CKKS `--kind depth --all` selection excludes the 8192-row file
+  for the default `8192` ring; run that file with `--ring-size 16384`.
+- CKKS correctness is approximate. Compare `mae`, `rmse`, max error, relative
+  error, `precision_bits`, and `pass_rate`; do not expect exact equality.
+
+## Multiplicative Depth
+
+- Depth runs use `operation=depth_mul` and the generator-defined workload:
+  `depth_1 = a * b`, then `depth_n = depth_(n-1) * depth_(n-1)`.
+- Depth runners return success after recording the first failed depth. A
+  `correct=false` row is the measured limit for the selected parameter set, not
+  automatically a broken executable.
+- Exact BFV/BGV rows compare centered plaintext residues modulo the plaintext
+  modulus. CKKS rows compare approximate values and can show large relative
+  errors when expected values are near zero even if absolute error passes.
+- The default CKKS depth runner uses smaller scale bits than the CKKS primitive
+  runner so four rescale levels fit in the default `8192` ring.
+
 ## OpenFHE Serialization
 
-- OpenFHE BFV object serialization is isolated in `openfhe_bfv_serialization`
-  instead of being mixed into exact or rotation correctness runners.
+- OpenFHE object serialization is isolated in scheme-specific serialization
+  runners instead of being mixed into exact, depth, or rotation correctness
+  runners.
 - OpenFHE serialization requires the OpenFHE serialization headers such as
-  `ciphertext-ser.h`, `cryptocontext-ser.h`, `key/key-ser.h`, and
-  `scheme/bfvrns/bfvrns-ser.h` so cereal type registration is available.
+  `ciphertext-ser.h`, `cryptocontext-ser.h`, `key/key-ser.h`, and the matching
+  scheme registration header: `scheme/bfvrns/bfvrns-ser.h`,
+  `scheme/bgvrns/bgvrns-ser.h`, or `scheme/ckksrns/ckksrns-ser.h`.
 - If OpenFHE serialization fails, exact and rotation runners should still be
   treated independently.
 - SEAL BFV rows still report byte sizes where available.
@@ -42,6 +69,68 @@ SEAL/OpenFHE benchmark suite. It is not a bug log.
 - Key and object serialization should be treated as single-process baseline I/O
   and object encoding work, not as an OpenMP thread-scaling primitive.
 - For serialization, compare `byte_size`, `latency_ms`, and `mb_per_sec`.
+
+## OpenFHE Thread Scaling
+
+- The normal comparison suite intentionally remains SEAL baseline, OpenFHE with
+  `OMP_NUM_THREADS=1`, and OpenFHE with `OMP_NUM_THREADS=6`.
+- Use `--thread-scaling` for OpenFHE-only scaling runs across
+  `OMP_NUM_THREADS=1,2,4,6,8`.
+- OpenFHE child processes are launched with `OMP_DYNAMIC=FALSE`,
+  `OMP_PROC_BIND=close`, and `OMP_PLACES=cores` to reduce dynamic OpenMP
+  scheduling and affinity noise.
+- Single-operation rows can be noisy, especially for thread counts above one.
+  For suspicious results, use `--warmups 1 --repetitions 5` and compare median
+  rows per operation/thread.
+- SEAL is not included in the scaling suite because this benchmark harness does
+  not expose an equivalent per-run SEAL thread-count control.
+- Thread scaling is available for exact, rotation, depth, workload, and memory
+  runners. Serialization rejects `--thread-scaling`.
+
+## Advanced Benchmarks
+
+- SEAL low-level NTT and polynomial arithmetic targets use `seal::util`
+  internal helpers from the sibling SEAL source checkout. Treat those rows as
+  low-level kernel measurements, not public SEAL API portability tests.
+- OpenFHE low-level NTT rows use polynomial format switching between
+  coefficient and evaluation formats.
+- Generic key switching is implemented with OpenFHE public `KeySwitchGen` and
+  `KeySwitch`. SEAL rows report `supported=false` because SEAL exposes
+  relinearization and Galois-key switching but not generic public key-to-key
+  switching.
+- CKKS matrix multiplication is implemented as encrypted A rows multiplied by
+  plaintext B columns, with rotate-sum dot products for each 64x64 output cell.
+  It is a real CKKS matrix workload, but not ciphertext-ciphertext matrix
+  multiplication.
+- Heap tracing counts C++ `new`/`delete` activity in the benchmark process.
+  `allocated_bytes` and `peak_live_bytes` are the primary fields; some library
+  deallocations may not be visible when the compiler/runtime uses unsized
+  deallocation paths.
+- Corpus-memory and thread-memory runners hold one ciphertext per corpus row.
+  Increase corpus size gradually because ciphertext count directly controls
+  resident memory pressure.
+
+## End-to-End Dot Product
+
+- The current end-to-end workload is a packed vector dot product:
+  encode/encrypt two vectors, multiply slotwise, rotate-sum, decrypt, and decode
+  the scalar result.
+- Exact BFV/BGV dot runs are intentionally limited to one batching row. With
+  `ring_size=8192`, use workload files up to 4096 rows.
+- The dot workload requires power-of-two row counts because the rotate-sum tree
+  uses steps 1, 2, 4, and so on.
+- This is an end-to-end workload sanity benchmark, not a full matrix-vector or
+  matrix-matrix packing benchmark.
+
+## Memory Measurement
+
+- Memory rows report process peak RSS via `getrusage(RUSAGE_SELF).ru_maxrss`,
+  normalized to KB.
+- Peak RSS is monotonic within a process. `delta_peak_rss_kb` is relative to the
+  beginning of that benchmark process, not isolated allocation for only the
+  named operation.
+- Memory rows are best used to compare whole benchmark phases and final peak
+  footprint across libraries/schemes under the same server OS.
 
 ## BFV Rotation Semantics
 
@@ -70,9 +159,23 @@ SEAL/OpenFHE benchmark suite. It is not a bug log.
 
 ## Current Scope
 
-- Current implemented scheme scope is BFV exact primitive benchmarking and BFV
-  rotation benchmarking.
-- BGV is not treated as identical to BFV. It should be added as separate
-  `scheme=BGV` benchmark targets and result rows.
-- CKKS requires separate numerical accuracy metrics such as MAE, RMSE, max
-  error, and relative error.
+- Current implemented scheme scope is BFV exact primitive benchmarking, BGV
+  exact primitive benchmarking, BFV rotation benchmarking, BFV/BGV/CKKS
+  multiplicative-depth benchmarking, BFV/BGV/CKKS serialization benchmarking,
+  BFV/BGV/CKKS dot-product end-to-end workload benchmarking, and CKKS
+  approximate primitive benchmarking. BFV/BGV/CKKS peak-RSS memory
+  benchmarking is also implemented as `--kind memory`.
+- BGV exact is implemented as separate `scheme=BGV` benchmark targets and
+  result rows. BGV serialization is implemented; BGV rotation is not
+  implemented yet.
+- CKKS primitive rows are implemented as `scheme=CKKS` benchmark targets and
+  report MAE, RMSE, max error, relative error, precision bits, scale, and level
+  fields. CKKS depth is implemented as a separate `--kind depth` runner.
+  CKKS serialization is implemented as a separate `--kind serialization`
+  runner. CKKS matrix multiplication is implemented as `--kind matrix`.
+- OpenFHE thread scaling is implemented as a runner-level mode and writes
+  separate scaling files so normal SEAL/OpenFHE comparison reports stay stable.
+- Advanced groups are implemented for low-level NTT/INTT, low-level polynomial
+  arithmetic, key switching, CKKS 64x64 matrix multiplication, heap tracing,
+  persistent footprint, corpus memory scaling, thread memory scaling, and CPU
+  utilization rows.
