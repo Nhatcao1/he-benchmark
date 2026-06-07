@@ -8,6 +8,8 @@
 #include "benchmark_args.hpp"
 #include "timer.hpp"
 
+using namespace lbcrypto;
+
 namespace
 {
 #ifdef HE_BENCHMARK_OPENFHE_LOWLEVEL_POLY
@@ -64,8 +66,8 @@ int main(int argc, char **argv)
         const auto element_params = crypto_context->GetElementParams();
 
         lbcrypto::DCRTPoly::DugType dug;
-        lbcrypto::DCRTPoly poly_a(dug, element_params, lbcrypto::Format::COEFFICIENT);
-        lbcrypto::DCRTPoly poly_b(dug, element_params, lbcrypto::Format::COEFFICIENT);
+        lbcrypto::DCRTPoly poly_a(dug, element_params, COEFFICIENT);
+        lbcrypto::DCRTPoly poly_b(dug, element_params, COEFFICIENT);
 
 #ifdef HE_BENCHMARK_OPENFHE_LOWLEVEL_POLY
         {
@@ -75,8 +77,8 @@ int main(int argc, char **argv)
             print_row("poly_add", args.ring_size, result.GetLength() == poly_a.GetLength(), elapsed_ms);
         }
         {
-            poly_a.SetFormat(lbcrypto::Format::EVALUATION);
-            poly_b.SetFormat(lbcrypto::Format::EVALUATION);
+            poly_a.SetFormat(EVALUATION);
+            poly_b.SetFormat(EVALUATION);
             const hebench::Timer timer;
             const auto result = poly_a * poly_b;
             const auto elapsed_ms = timer.elapsed_ms();
@@ -86,13 +88,13 @@ int main(int argc, char **argv)
         const auto original = poly_a;
         {
             const hebench::Timer timer;
-            poly_a.SetFormat(lbcrypto::Format::EVALUATION);
+            poly_a.SetFormat(EVALUATION);
             const auto elapsed_ms = timer.elapsed_ms();
             print_row("ntt_forward", args.ring_size, true, elapsed_ms);
         }
         {
             const hebench::Timer timer;
-            poly_a.SetFormat(lbcrypto::Format::COEFFICIENT);
+            poly_a.SetFormat(COEFFICIENT);
             const auto elapsed_ms = timer.elapsed_ms();
             print_row("intt_inverse", args.ring_size, poly_a == original, elapsed_ms);
         }

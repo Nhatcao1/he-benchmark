@@ -27,18 +27,7 @@ namespace
     constexpr const char *kBinaryName = "openfhe_bfv_keyswitch";
 #endif
 
-    std::vector<int64_t> exact_values(
-        const std::vector<hebench::ExactRow> &rows,
-        std::size_t slot_count)
-    {
-        std::vector<int64_t> values(slot_count, 0);
-        for (std::size_t i = 0; i < rows.size(); ++i)
-        {
-            values[i] = hebench::centered_mod(rows[i].a, kPlainModulus);
-        }
-        return values;
-    }
-
+#ifdef HE_BENCHMARK_OPENFHE_KEYSWITCH_CKKS
     std::vector<double> ckks_values(
         const std::vector<hebench::CkksRow> &rows,
         std::size_t slot_count)
@@ -50,6 +39,19 @@ namespace
         }
         return values;
     }
+#else
+    std::vector<int64_t> exact_values(
+        const std::vector<hebench::ExactRow> &rows,
+        std::size_t slot_count)
+    {
+        std::vector<int64_t> values(slot_count, 0);
+        for (std::size_t i = 0; i < rows.size(); ++i)
+        {
+            values[i] = hebench::centered_mod(rows[i].a, kPlainModulus);
+        }
+        return values;
+    }
+#endif
 
     void print_row(
         const std::string &operation,
