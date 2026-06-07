@@ -52,13 +52,6 @@ namespace
         return values;
     }
 
-    std::vector<int64_t> encode_scalar(std::int64_t value, std::size_t slot_count)
-    {
-        std::vector<int64_t> values(slot_count, 0);
-        values[0] = hebench::centered_mod(value, kPlainModulus);
-        return values;
-    }
-
     void print_row(
         const std::string &operation,
         std::size_t size,
@@ -108,6 +101,14 @@ namespace
         std::cout << '\n';
     }
 
+#if defined(HE_BENCHMARK_RESOURCE_CORPUS_MEMORY) || defined(HE_BENCHMARK_RESOURCE_THREAD_MEMORY)
+    std::vector<int64_t> encode_scalar(std::int64_t value, std::size_t slot_count)
+    {
+        std::vector<int64_t> values(slot_count, 0);
+        values[0] = hebench::centered_mod(value, kPlainModulus);
+        return values;
+    }
+
     int requested_threads()
     {
         const char *value = std::getenv("OMP_NUM_THREADS");
@@ -117,6 +118,7 @@ namespace
         }
         return std::max(1, std::atoi(value));
     }
+#endif
 }
 
 int main(int argc, char **argv)
