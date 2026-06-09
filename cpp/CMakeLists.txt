@@ -7,7 +7,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
 option(HE_BENCHMARK_USE_SIBLING_SEAL "Build Microsoft SEAL from ../SEAL" ON)
-option(HE_BENCHMARK_BUILD_OPENFHE "Build OpenFHE benchmark targets" OFF)
+option(HE_BENCHMARK_BUILD_OPENFHE "Build OpenFHE benchmark targets" ON)
 option(HE_BENCHMARK_LINK_OPENFHE_STATIC "Link OpenFHE static libraries" OFF)
 
 # Header-only helpers shared by SEAL and OpenFHE benchmark executables.
@@ -52,6 +52,10 @@ target_link_libraries(seal_ckks_depth PRIVATE he_benchmark_common SEAL::seal)
 add_executable(seal_bfv_rotation seal/seal_bfv_rotation.cpp)
 target_link_libraries(seal_bfv_rotation PRIVATE he_benchmark_common SEAL::seal)
 
+add_executable(seal_bgv_rotation seal/seal_bfv_rotation.cpp)
+target_compile_definitions(seal_bgv_rotation PRIVATE HE_BENCHMARK_SEAL_ROTATION_BGV)
+target_link_libraries(seal_bgv_rotation PRIVATE he_benchmark_common SEAL::seal)
+
 add_executable(seal_bfv_serialization seal/seal_bfv_serialization.cpp)
 target_link_libraries(seal_bfv_serialization PRIVATE he_benchmark_common SEAL::seal)
 
@@ -71,6 +75,16 @@ target_link_libraries(seal_bgv_dot PRIVATE he_benchmark_common SEAL::seal)
 
 add_executable(seal_ckks_dot seal/seal_ckks_dot.cpp)
 target_link_libraries(seal_ckks_dot PRIVATE he_benchmark_common SEAL::seal)
+
+add_executable(seal_bfv_e2e seal/seal_exact_e2e.cpp)
+target_link_libraries(seal_bfv_e2e PRIVATE he_benchmark_common SEAL::seal)
+
+add_executable(seal_bgv_e2e seal/seal_exact_e2e.cpp)
+target_compile_definitions(seal_bgv_e2e PRIVATE HE_BENCHMARK_SEAL_E2E_BGV)
+target_link_libraries(seal_bgv_e2e PRIVATE he_benchmark_common SEAL::seal)
+
+add_executable(seal_ckks_e2e seal/seal_ckks_e2e.cpp)
+target_link_libraries(seal_ckks_e2e PRIVATE he_benchmark_common SEAL::seal)
 
 add_executable(seal_bfv_memory seal/seal_exact_memory.cpp)
 target_link_libraries(seal_bfv_memory PRIVATE he_benchmark_common SEAL::seal)
@@ -118,8 +132,8 @@ foreach(resource_mode IN ITEMS heap footprint corpus_memory thread_memory cpu)
 endforeach()
 
 if(HE_BENCHMARK_BUILD_OPENFHE)
-    # OpenFHE is optional because local machines may only have the SEAL sibling
-    # checkout. Server builds enable this after installing OpenFHE.
+    # Fresh builds expect OpenFHE by default. Pass
+    # -DHE_BENCHMARK_BUILD_OPENFHE=OFF for SEAL-only local development.
     find_package(OpenFHE CONFIG REQUIRED)
     separate_arguments(OpenFHE_CXX_FLAGS_LIST NATIVE_COMMAND "${OpenFHE_CXX_FLAGS}")
     separate_arguments(OpenFHE_EXE_LINKER_FLAGS_LIST NATIVE_COMMAND "${OpenFHE_EXE_LINKER_FLAGS}")
@@ -433,6 +447,30 @@ if(HE_BENCHMARK_BUILD_OPENFHE)
         ${HE_BENCHMARK_OPENFHE_LIBRARIES}
     )
 
+    add_executable(openfhe_bgv_rotation openfhe/openfhe_bfv_rotation.cpp)
+    target_compile_definitions(openfhe_bgv_rotation PRIVATE HE_BENCHMARK_OPENFHE_ROTATION_BGV)
+    target_include_directories(openfhe_bgv_rotation PRIVATE
+        ${OPENMP_INCLUDES}
+        ${OpenFHE_INCLUDE}
+        ${OpenFHE_INCLUDE}/third-party/include
+        ${OpenFHE_INCLUDE}/core
+        ${OpenFHE_INCLUDE}/pke
+        ${OpenFHE_INCLUDE}/binfhe
+    )
+    target_compile_options(openfhe_bgv_rotation PRIVATE ${OpenFHE_CXX_FLAGS_LIST})
+    target_link_options(openfhe_bgv_rotation PRIVATE ${OpenFHE_EXE_LINKER_FLAGS_LIST})
+    if(UNIX AND NOT APPLE)
+        target_link_options(openfhe_bgv_rotation PRIVATE -Wl,--no-as-needed)
+    endif()
+    target_link_directories(openfhe_bgv_rotation PRIVATE
+        ${OpenFHE_LIBDIR}
+        ${OPENMP_LIBRARIES}
+    )
+    target_link_libraries(openfhe_bgv_rotation PRIVATE
+        he_benchmark_common
+        ${HE_BENCHMARK_OPENFHE_LIBRARIES}
+    )
+
     add_executable(openfhe_bfv_serialization openfhe/openfhe_bfv_serialization.cpp)
     target_include_directories(openfhe_bfv_serialization PRIVATE
         ${OPENMP_INCLUDES}
@@ -538,6 +576,9 @@ if(HE_BENCHMARK_BUILD_OPENFHE)
     add_openfhe_benchmark(openfhe_bgv_keyswitch openfhe/openfhe_keyswitch.cpp HE_BENCHMARK_OPENFHE_KEYSWITCH_BGV)
     add_openfhe_benchmark(openfhe_ckks_keyswitch openfhe/openfhe_keyswitch.cpp HE_BENCHMARK_OPENFHE_KEYSWITCH_CKKS)
     add_openfhe_benchmark(openfhe_ckks_matrix openfhe/openfhe_ckks_matrix.cpp)
+    add_openfhe_benchmark(openfhe_bfv_e2e openfhe/openfhe_exact_e2e.cpp)
+    add_openfhe_benchmark(openfhe_bgv_e2e openfhe/openfhe_exact_e2e.cpp HE_BENCHMARK_OPENFHE_E2E_BGV)
+    add_openfhe_benchmark(openfhe_ckks_e2e openfhe/openfhe_ckks_e2e.cpp)
 
     foreach(resource_mode IN ITEMS heap footprint corpus_memory thread_memory cpu)
         string(TOUPPER "${resource_mode}" resource_mode_upper)

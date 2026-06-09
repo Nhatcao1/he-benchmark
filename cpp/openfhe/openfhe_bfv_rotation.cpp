@@ -15,6 +15,15 @@ namespace
 {
     constexpr std::uint64_t kPlainModulus = 786433;
     constexpr std::uint32_t kMultiplicativeDepth = 2;
+#ifdef HE_BENCHMARK_OPENFHE_ROTATION_BGV
+    constexpr const char *kSchemeName = "BGV";
+    constexpr const char *kBinaryName = "openfhe_bgv_rotation";
+    using CryptoContextParams = lbcrypto::CCParams<lbcrypto::CryptoContextBGVRNS>;
+#else
+    constexpr const char *kSchemeName = "BFV";
+    constexpr const char *kBinaryName = "openfhe_bfv_rotation";
+    using CryptoContextParams = lbcrypto::CCParams<lbcrypto::CryptoContextBFVRNS>;
+#endif
 
     std::vector<int64_t> encode_rotation_inputs(
         const std::vector<hebench::RotationRow> &rows,
@@ -143,7 +152,7 @@ namespace
 
         std::cout
             << "library=OpenFHE"
-            << ",scheme=BFV"
+            << ",scheme=" << kSchemeName
             << ",operation=" << operation
             << ",size=" << size
             << ",ring_size=" << ring_size
@@ -182,10 +191,10 @@ int main(int argc, char **argv)
         }
         if (rows.size() > args.ring_size)
         {
-            throw std::runtime_error("corpus row count exceeds OpenFHE BFV batch size");
+            throw std::runtime_error(std::string("corpus row count exceeds OpenFHE ") + kSchemeName + " batch size");
         }
 
-        lbcrypto::CCParams<lbcrypto::CryptoContextBFVRNS> parameters;
+        CryptoContextParams parameters;
         parameters.SetPlaintextModulus(kPlainModulus);
         parameters.SetMultiplicativeDepth(kMultiplicativeDepth);
         parameters.SetRingDim(static_cast<std::uint32_t>(args.ring_size));
@@ -244,7 +253,7 @@ int main(int argc, char **argv)
     }
     catch (const std::exception &error)
     {
-        std::cerr << "openfhe_bfv_rotation failed: " << error.what() << '\n';
+        std::cerr << kBinaryName << " failed: " << error.what() << '\n';
         return 2;
     }
 }

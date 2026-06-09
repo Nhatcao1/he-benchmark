@@ -105,6 +105,13 @@ The CKKS targets validate approximate packed arithmetic against generated CKKS c
 
 CKKS rows report `mae`, `rmse`, `max_abs_error`, relative-error metrics, `precision_bits`, `pass_rate`, scale, and level fields. CKKS primitives currently include encode, decode, key generation, relinearization-key generation, rotation-key generation, encrypt, decrypt, add, subtract, multiply, add/subtract/multiply plaintext, square, negate, relinearization, rotations, and rescale.
 
+For CKKS ring-size scaling experiments, use the explicit `ring-sweep` config. It applies the same low-depth CKKS profile to SEAL and OpenFHE, relaxes the security check so small rings can run, and prints `ckks_config`, `ckks_depth`, `scale_bits`, `first_mod_bits`, and `security` on each row:
+
+```bash
+./run_benchmarks.py --scheme ckks --tests quick8 --ckks-config ring-sweep --ring-sizes 2048,4096,8192,16384,32768
+```
+
+
 Depth targets use `he_corpus/depth/*.csv` and report one `operation=depth_mul`
 row per sequential multiplication level. BFV/BGV depth rows validate exact
 centered-modulo results; CKKS depth rows validate approximate results with the
@@ -116,18 +123,28 @@ serialized byte size, and MB/s for ciphertexts, secret keys, public keys,
 relinearization keys, and rotation keys. CKKS ciphertext serialization rows also
 include scale and level fields.
 
+Rotation targets cover BFV and BGV packed exact vectors. They report
+`rotation_keygen`, `rotate_1`, `rotate_-1`, and `rotate_8` rows with correctness
+status under each library's packing semantics.
+
 The workload targets implement one end-to-end encrypted dot product. They time
 encode, encrypt, encrypted slotwise multiply, relinearization, rotation-based
 accumulation, decrypt, and decode as `operation=dot_product_e2e`. BFV/BGV rows
 check exact scalar correctness; CKKS rows report absolute and relative error.
+
+The `--kind e2e` targets implement request/response workflows for
+`end_to_end_sum` and `end_to_end_dot_product_pt`. They include ciphertext
+serialization/deserialization around the simulated client/server boundary and
+report request bytes, response bytes, total latency, server evaluation latency,
+and peak RSS.
 
 Memory targets report process peak RSS after each major phase: context setup,
 key generation, relinearization-key generation, rotation-key generation, encode,
 encrypt, multiply, rotate, and decrypt. Rows include `peak_rss_kb` and
 `delta_peak_rss_kb`.
 
-The Python runner's normal comparison writes SEAL, OpenFHE one-thread, and
-OpenFHE six-thread reports. OpenFHE-only thread scaling is intentionally a
+The Python runner's normal comparison writes SEAL, OpenFHE one-thread,
+OpenFHE four-thread, and OpenFHE six-thread reports. OpenFHE-only thread scaling is intentionally a
 separate mode:
 
 ```bash
@@ -149,7 +166,8 @@ switching, not a generic public key-to-key switch API.
 By default the CMake build expects:
 
 - Microsoft SEAL cloned at `../SEAL` relative to this repo's parent directory.
-- OpenFHE installed as a CMake package when `HE_BENCHMARK_BUILD_OPENFHE=ON`.
+- OpenFHE installed as a CMake package. Fresh CMake builds enable OpenFHE
+  benchmark targets by default.
 
 Example OpenFHE install from source:
 
@@ -170,8 +188,7 @@ sudo cmake --install OpenFHE/build
 
 ```bash
 cmake -S cpp -B cpp/build \
-  -DCMAKE_BUILD_TYPE=Release \
-  -DHE_BENCHMARK_BUILD_OPENFHE=ON
+  -DCMAKE_BUILD_TYPE=Release
 cmake --build cpp/build -j"$(nproc)"
 
 ./cpp/build/seal_bfv_exact he_corpus/exact/exact_safe_000008.csv
@@ -179,15 +196,15 @@ cmake --build cpp/build -j"$(nproc)"
 ./cpp/build/seal_bgv_exact he_corpus/exact/exact_safe_000008.csv
 ./cpp/build/openfhe_bgv_exact he_corpus/exact/exact_safe_000008.csv
 ./cpp/build/seal_ckks --corpus he_corpus/ckks_normal/ckks_normal_000008.csv --ring-size 8192
-./cpp/build/openfhe_ckks --corpus he_corpus/ckks_normal/ckks_normal_000008.csv --ring-size 8192
+./cpp/build/openfhe_ckks --corpus he_corpus/ckks_normal/ckks_normal_000008.csv --ring-size 16384
 ./cpp/build/seal_bfv_depth --corpus he_corpus/depth/exact_depth_000008.csv --ring-size 8192 --max-depth 4
-./cpp/build/openfhe_ckks_depth --corpus he_corpus/depth/ckks_depth_000008.csv --ring-size 8192 --max-depth 4
+./cpp/build/openfhe_ckks_depth --corpus he_corpus/depth/ckks_depth_000008.csv --ring-size 16384 --max-depth 4
 ./cpp/build/seal_bgv_serialization --corpus he_corpus/exact/exact_safe_000008.csv --ring-size 8192
-./cpp/build/openfhe_ckks_serialization --corpus he_corpus/ckks_normal/ckks_normal_000008.csv --ring-size 8192
+./cpp/build/openfhe_ckks_serialization --corpus he_corpus/ckks_normal/ckks_normal_000008.csv --ring-size 16384
 ./cpp/build/seal_bfv_dot --corpus he_corpus/exact/exact_safe_000008.csv --ring-size 8192
-./cpp/build/openfhe_ckks_dot --corpus he_corpus/ckks_normal/ckks_normal_000008.csv --ring-size 8192
+./cpp/build/openfhe_ckks_dot --corpus he_corpus/ckks_normal/ckks_normal_000008.csv --ring-size 16384
 ./cpp/build/seal_bfv_memory --corpus he_corpus/exact/exact_safe_000008.csv --ring-size 8192
-./cpp/build/openfhe_ckks_memory --corpus he_corpus/ckks_normal/ckks_normal_000008.csv --ring-size 8192
+./cpp/build/openfhe_ckks_memory --corpus he_corpus/ckks_normal/ckks_normal_000008.csv --ring-size 16384
 ```
 
 If OpenFHE is installed somewhere other than the default prefix, configure this repo with:
@@ -195,6 +212,10 @@ If OpenFHE is installed somewhere other than the default prefix, configure this 
 ```bash
 cmake -S cpp -B cpp/build \
   -DCMAKE_BUILD_TYPE=Release \
-  -DHE_BENCHMARK_BUILD_OPENFHE=ON \
   -DCMAKE_PREFIX_PATH=/path/to/openfhe/install
 ```
+
+For a temporary SEAL-only local build, pass
+`-DHE_BENCHMARK_BUILD_OPENFHE=OFF`. If an existing build directory was
+configured before OpenFHE became the default, force the cached option back on
+with `-DHE_BENCHMARK_BUILD_OPENFHE=ON`.

@@ -10,6 +10,7 @@
 #include "seal/seal.h"
 
 #include "benchmark_args.hpp"
+#include "ckks_config.hpp"
 #include "ckks_compare.hpp"
 #include "csv_reader.hpp"
 #include "memory_usage.hpp"
@@ -17,7 +18,7 @@
 
 namespace
 {
-    constexpr double kScale = static_cast<double>(std::uint64_t{1} << 40);
+    std::string g_ckks_config_extra;
 
     template <typename T>
     std::size_t serialized_size(const T &value)
@@ -75,7 +76,12 @@ namespace
             << ",correct=" << (correct ? "true" : "false")
             << ",latency_ms=" << elapsed_ms
             << ",ops_per_sec=" << ops_per_sec
-            << ",values_per_sec=0"
+            << ",values_per_sec=0";
+        if (!g_ckks_config_extra.empty())
+        {
+            std::cout << ',' << g_ckks_config_extra;
+        }
+        std::cout
             << ",peak_rss_kb=" << peak_kb
             << ",delta_peak_rss_kb=" << delta_kb;
         if (byte_size > 0)
@@ -106,13 +112,19 @@ int main(int argc, char **argv)
         {
             throw std::runtime_error("corpus has no rows: " + args.corpus_path);
         }
+        const auto ckks_config = hebench::ckks_config_for(args, 2, 40);
+        g_ckks_config_extra = hebench::ckks_config_extra(ckks_config);
         const auto baseline_kb = hebench::peak_rss_kb();
 
         const hebench::Timer context_timer;
         seal::EncryptionParameters parms(seal::scheme_type::ckks);
         parms.set_poly_modulus_degree(args.ring_size);
-        parms.set_coeff_modulus(seal::CoeffModulus::Create(args.ring_size, {60, 40, 40, 60}));
-        seal::SEALContext context(parms);
+        parms.set_coeff_modulus(seal::CoeffModulus::Create(
+            args.ring_size, hebench::seal_ckks_coeff_modulus_bits(ckks_config)));
+        seal::SEALContext context(
+            parms,
+            true,
+            ckks_config.relaxed_security ? seal::sec_level_type::none : seal::sec_level_type::tc128);
         if (!context.parameters_set())
         {
             throw std::runtime_error(context.parameter_error_message());
@@ -151,8 +163,8 @@ int main(int argc, char **argv)
         seal::Plaintext plain_a;
         seal::Plaintext plain_b;
         const hebench::Timer encode_timer;
-        encoder.encode(values_for(rows, false, slot_count), kScale, plain_a);
-        encoder.encode(values_for(rows, true, slot_count), kScale, plain_b);
+        encoder.encode(values_for(rows, false, slot_count), hebench::ckks_scale(ckks_config), plain_a);
+        encoder.encode(values_for(rows, true, slot_count), hebench::ckks_scale(ckks_config), plain_b);
         const auto encode_ms = encode_timer.elapsed_ms();
         print_row("memory_encode", rows.size(), args.ring_size, true, encode_ms, baseline_kb, serialized_size(plain_a) + serialized_size(plain_b));
 

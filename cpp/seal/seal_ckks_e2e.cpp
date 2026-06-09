@@ -12,19 +12,12 @@
 #include "benchmark_args.hpp"
 #include "ckks_config.hpp"
 #include "csv_reader.hpp"
+#include "memory_usage.hpp"
 #include "timer.hpp"
 
 namespace
 {
     std::string g_ckks_config_extra;
-
-    template <typename T>
-    std::size_t serialized_size(const T &value)
-    {
-        std::stringstream stream;
-        value.save(stream);
-        return stream.str().size();
-    }
 
     bool is_power_of_two(std::size_t value)
     {
@@ -42,6 +35,16 @@ namespace
             values[i] = use_b ? rows[i].b : rows[i].a;
         }
         return values;
+    }
+
+    double expected_sum(const std::vector<hebench::CkksRow> &rows)
+    {
+        double sum = 0.0;
+        for (const auto &row : rows)
+        {
+            sum += row.a;
+        }
+        return sum;
     }
 
     double expected_dot(const std::vector<hebench::CkksRow> &rows)
@@ -64,12 +67,46 @@ namespace
         return steps;
     }
 
+    template <typename T>
+    std::string save_to_string(const T &value)
+    {
+        std::stringstream stream;
+        value.save(stream);
+        return stream.str();
+    }
+
+    template <typename T>
+    void load_from_string(const seal::SEALContext &context, const std::string &bytes, T &value)
+    {
+        std::stringstream stream(bytes);
+        value.load(context, stream);
+    }
+
+    seal::Ciphertext rotate_sum(
+        seal::Evaluator &evaluator,
+        const seal::GaloisKeys &galois_keys,
+        const seal::Ciphertext &input,
+        std::size_t size)
+    {
+        seal::Ciphertext result = input;
+        for (const auto step : rotation_steps(size))
+        {
+            seal::Ciphertext rotated;
+            evaluator.rotate_vector(result, step, galois_keys, rotated);
+            evaluator.add_inplace(result, rotated);
+        }
+        return result;
+    }
+
     void print_row(
+        const std::string &operation,
         std::size_t size,
         std::size_t ring_size,
         bool correct,
-        double elapsed_ms,
-        std::size_t byte_size,
+        double total_ms,
+        double server_eval_ms,
+        std::size_t request_bytes,
+        std::size_t response_bytes,
         std::size_t rotations_count,
         std::size_t components_after,
         double scale_after,
@@ -77,8 +114,8 @@ namespace
         double expected,
         double actual)
     {
-        const auto ops_per_sec = elapsed_ms > 0.0 ? 1000.0 / elapsed_ms : 0.0;
-        const auto values_per_sec = elapsed_ms > 0.0 ? static_cast<double>(size) * 1000.0 / elapsed_ms : 0.0;
+        const auto requests_per_sec = total_ms > 0.0 ? 1000.0 / total_ms : 0.0;
+        const auto values_per_sec = total_ms > 0.0 ? static_cast<double>(size) * 1000.0 / total_ms : 0.0;
         const auto abs_error = std::abs(actual - expected);
         const auto relative_error = abs_error / std::max(std::abs(expected), 1e-12);
         const auto precision_bits = relative_error > 0.0 ? -std::log2(relative_error) : INFINITY;
@@ -86,19 +123,23 @@ namespace
         std::cout
             << "library=SEAL"
             << ",scheme=CKKS"
-            << ",operation=dot_product_e2e"
+            << ",operation=" << operation
             << ",size=" << size
             << ",ring_size=" << ring_size
             << ",correct=" << (correct ? "true" : "false")
-            << ",latency_ms=" << elapsed_ms
-            << ",ops_per_sec=" << ops_per_sec
+            << ",latency_ms=" << total_ms
+            << ",server_eval_latency_ms=" << server_eval_ms
+            << ",ops_per_sec=" << requests_per_sec
+            << ",requests_per_sec=" << requests_per_sec
             << ",values_per_sec=" << values_per_sec;
         if (!g_ckks_config_extra.empty())
         {
             std::cout << ',' << g_ckks_config_extra;
         }
         std::cout
-            << ",byte_size=" << byte_size
+            << ",request_bytes=" << request_bytes
+            << ",response_bytes=" << response_bytes
+            << ",peak_rss_kb=" << hebench::peak_rss_kb()
             << ",rotations_count=" << rotations_count
             << ",components_after=" << components_after
             << ",scale_after=" << scale_after
@@ -134,7 +175,7 @@ int main(int argc, char **argv)
         }
         if (!is_power_of_two(rows.size()))
         {
-            throw std::runtime_error("dot workload requires a power-of-two row count");
+            throw std::runtime_error("end-to-end workloads require a power-of-two row count");
         }
 
         const auto ckks_config = hebench::ckks_config_for(args, 2, 40);
@@ -164,69 +205,84 @@ int main(int argc, char **argv)
         seal::KeyGenerator keygen(context);
         const auto secret_key = keygen.secret_key();
         seal::PublicKey public_key;
-        seal::RelinKeys relin_keys;
         seal::GaloisKeys galois_keys;
         keygen.create_public_key(public_key);
-        keygen.create_relin_keys(relin_keys);
         keygen.create_galois_keys(rotation_steps(rows.size()), galois_keys);
 
         seal::Encryptor encryptor(context, public_key);
         seal::Evaluator evaluator(context);
         seal::Decryptor decryptor(context, secret_key);
 
-        seal::Ciphertext result;
-        std::vector<double> decoded;
-        const auto expected = expected_dot(rows);
-
-        const hebench::Timer timer;
         seal::Plaintext plain_a;
         seal::Plaintext plain_b;
         encoder.encode(values_for(rows, false, slot_count), hebench::ckks_scale(ckks_config), plain_a);
         encoder.encode(values_for(rows, true, slot_count), hebench::ckks_scale(ckks_config), plain_b);
 
-        seal::Ciphertext encrypted_a;
-        seal::Ciphertext encrypted_b;
-        encryptor.encrypt(plain_a, encrypted_a);
-        encryptor.encrypt(plain_b, encrypted_b);
-
-        evaluator.multiply(encrypted_a, encrypted_b, result);
-        evaluator.relinearize_inplace(result, relin_keys);
-        evaluator.rescale_to_next_inplace(result);
-        for (std::size_t step = 1; step < rows.size(); step *= 2)
+        bool all_correct = true;
+        for (const auto operation : {"end_to_end_sum", "end_to_end_dot_product_pt"})
         {
-            seal::Ciphertext rotated;
-            evaluator.rotate_vector(result, static_cast<int>(step), galois_keys, rotated);
-            evaluator.add_inplace(result, rotated);
+            const bool is_sum = std::string(operation) == "end_to_end_sum";
+            const auto expected = is_sum ? expected_sum(rows) : expected_dot(rows);
+
+            const hebench::Timer total_timer;
+            seal::Ciphertext encrypted_request;
+            encryptor.encrypt(plain_a, encrypted_request);
+            const auto request_bytes = save_to_string(encrypted_request);
+
+            seal::Ciphertext server_request;
+            load_from_string(context, request_bytes, server_request);
+
+            const hebench::Timer server_timer;
+            seal::Ciphertext server_result;
+            if (is_sum)
+            {
+                server_result = rotate_sum(evaluator, galois_keys, server_request, rows.size());
+            }
+            else
+            {
+                evaluator.multiply_plain(server_request, plain_b, server_result);
+                evaluator.rescale_to_next_inplace(server_result);
+                server_result = rotate_sum(evaluator, galois_keys, server_result, rows.size());
+            }
+            const auto server_eval_ms = server_timer.elapsed_ms();
+            const auto response_bytes = save_to_string(server_result);
+
+            seal::Ciphertext client_response;
+            load_from_string(context, response_bytes, client_response);
+            seal::Plaintext result_plain;
+            std::vector<double> decoded;
+            decryptor.decrypt(client_response, result_plain);
+            encoder.decode(result_plain, decoded);
+            const auto total_ms = total_timer.elapsed_ms();
+
+            const auto actual = decoded.empty() ? 0.0 : decoded[0];
+            const auto abs_error = std::abs(actual - expected);
+            const auto relative_error = abs_error / std::max(std::abs(expected), 1e-12);
+            const bool correct = abs_error <= 1e-3 || relative_error <= 1e-3;
+            all_correct = correct && all_correct;
+
+            print_row(
+                operation,
+                rows.size(),
+                args.ring_size,
+                correct,
+                total_ms,
+                server_eval_ms,
+                request_bytes.size(),
+                response_bytes.size(),
+                rotation_steps(rows.size()).size(),
+                client_response.size(),
+                client_response.scale(),
+                client_response.coeff_modulus_size(),
+                expected,
+                actual);
         }
 
-        seal::Plaintext dot_plain;
-        decryptor.decrypt(result, dot_plain);
-        encoder.decode(dot_plain, decoded);
-        const auto elapsed_ms = timer.elapsed_ms();
-
-        const auto actual = decoded.empty() ? 0.0 : decoded[0];
-        const auto abs_error = std::abs(actual - expected);
-        const auto relative_error = abs_error / std::max(std::abs(expected), 1e-12);
-        const bool correct = abs_error <= 1e-3 || relative_error <= 1e-3;
-
-        print_row(
-            rows.size(),
-            args.ring_size,
-            correct,
-            elapsed_ms,
-            serialized_size(result),
-            rotation_steps(rows.size()).size(),
-            result.size(),
-            result.scale(),
-            result.coeff_modulus_size(),
-            expected,
-            actual);
-
-        return correct ? 0 : 1;
+        return all_correct ? 0 : 1;
     }
     catch (const std::exception &error)
     {
-        std::cerr << "seal_ckks_dot failed: " << error.what() << '\n';
+        std::cerr << "seal_ckks_e2e failed: " << error.what() << '\n';
         return 2;
     }
 }

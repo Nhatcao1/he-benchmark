@@ -11,6 +11,10 @@ namespace hebench
         std::string corpus_path = "he_corpus/exact/exact_safe_000008.csv";
         std::size_t ring_size = 8192;
         std::size_t max_depth = 4;
+        std::string ckks_config = "default";
+        std::size_t ckks_depth = 0;
+        std::size_t ckks_scale_bits = 0;
+        std::size_t ckks_first_mod_bits = 0;
         bool show_help = false;
     };
 
@@ -72,6 +76,42 @@ namespace hebench
                 args.max_depth = parse_size_arg(argv[i], "--max-depth");
                 continue;
             }
+            if (option == "--ckks-config")
+            {
+                if (++i >= argc)
+                {
+                    throw std::runtime_error("missing value for --ckks-config");
+                }
+                args.ckks_config = argv[i];
+                continue;
+            }
+            if (option == "--ckks-depth")
+            {
+                if (++i >= argc)
+                {
+                    throw std::runtime_error("missing value for --ckks-depth");
+                }
+                args.ckks_depth = parse_size_arg(argv[i], "--ckks-depth");
+                continue;
+            }
+            if (option == "--ckks-scale-bits")
+            {
+                if (++i >= argc)
+                {
+                    throw std::runtime_error("missing value for --ckks-scale-bits");
+                }
+                args.ckks_scale_bits = parse_size_arg(argv[i], "--ckks-scale-bits");
+                continue;
+            }
+            if (option == "--ckks-first-mod-bits")
+            {
+                if (++i >= argc)
+                {
+                    throw std::runtime_error("missing value for --ckks-first-mod-bits");
+                }
+                args.ckks_first_mod_bits = parse_size_arg(argv[i], "--ckks-first-mod-bits");
+                continue;
+            }
             if (!option.empty() && option[0] == '-')
             {
                 throw std::runtime_error("unknown option: " + option);
@@ -87,6 +127,8 @@ namespace hebench
     inline std::string benchmark_usage(const std::string &program_name)
     {
         return "Usage: " + program_name +
-            " [--corpus he_corpus/exact/exact_safe_000008.csv] [--ring-size 8192] [--max-depth 4]\n";
+            " [--corpus he_corpus/exact/exact_safe_000008.csv] [--ring-size 8192] [--max-depth 4]"
+            " [--ckks-config default|ring-sweep] [--ckks-depth N]"
+            " [--ckks-scale-bits N] [--ckks-first-mod-bits N]\n";
     }
 }

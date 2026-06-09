@@ -10,6 +10,7 @@
 #include "openfhe.h"
 
 #include "benchmark_args.hpp"
+#include "ckks_config.hpp"
 #include "ckks_compare.hpp"
 #include "csv_reader.hpp"
 #include "timer.hpp"
@@ -18,8 +19,7 @@ namespace
 {
     using hebench::CkksOperation;
 
-    constexpr std::uint32_t kMultiplicativeDepth = 3;
-    constexpr std::uint32_t kScaleModSize = 40;
+    std::string g_ckks_config_extra;
 
     std::vector<double> values_for(
         const std::vector<hebench::CkksRow> &rows,
@@ -87,6 +87,10 @@ namespace
             << ",latency_ms=" << elapsed_ms
             << ",ops_per_sec=" << ops_per_sec
             << ",values_per_sec=" << values_per_sec;
+        if (!g_ckks_config_extra.empty())
+        {
+            std::cout << ',' << g_ckks_config_extra;
+        }
         if (!extra.empty())
         {
             std::cout << ',' << extra;
@@ -303,9 +307,20 @@ int main(int argc, char **argv)
             throw std::runtime_error("corpus row count exceeds OpenFHE CKKS batch size");
         }
 
+        const auto ckks_config = hebench::ckks_config_for(args, 3, 40);
+        g_ckks_config_extra = hebench::ckks_config_extra(ckks_config);
+
         lbcrypto::CCParams<lbcrypto::CryptoContextCKKSRNS> parameters;
-        parameters.SetMultiplicativeDepth(kMultiplicativeDepth);
-        parameters.SetScalingModSize(kScaleModSize);
+        parameters.SetMultiplicativeDepth(static_cast<std::uint32_t>(ckks_config.multiplicative_depth));
+        parameters.SetScalingModSize(static_cast<std::uint32_t>(ckks_config.scale_bits));
+        if (ckks_config.explicit_first_mod)
+        {
+            parameters.SetFirstModSize(static_cast<std::uint32_t>(ckks_config.first_mod_bits));
+        }
+        if (ckks_config.relaxed_security)
+        {
+            parameters.SetSecurityLevel(lbcrypto::HEStd_NotSet);
+        }
         parameters.SetRingDim(static_cast<std::uint32_t>(args.ring_size));
         parameters.SetBatchSize(static_cast<std::uint32_t>(args.ring_size / 2));
 

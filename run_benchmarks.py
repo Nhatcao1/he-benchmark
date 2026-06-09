@@ -130,6 +130,10 @@ LIBRARIES = {
             "seal": "seal_bfv_rotation",
             "openfhe": "openfhe_bfv_rotation",
         },
+        "bgv": {
+            "seal": "seal_bgv_rotation",
+            "openfhe": "openfhe_bgv_rotation",
+        },
     },
     "serialization": {
         "bfv": {
@@ -171,6 +175,20 @@ LIBRARIES = {
         "ckks": {
             "seal": "seal_ckks_dot",
             "openfhe": "openfhe_ckks_dot",
+        },
+    },
+    "e2e": {
+        "bfv": {
+            "seal": "seal_bfv_e2e",
+            "openfhe": "openfhe_bfv_e2e",
+        },
+        "bgv": {
+            "seal": "seal_bgv_e2e",
+            "openfhe": "openfhe_bgv_e2e",
+        },
+        "ckks": {
+            "seal": "seal_ckks_e2e",
+            "openfhe": "openfhe_ckks_e2e",
         },
     },
     "memory": {
@@ -274,7 +292,7 @@ LIBRARIES = {
 # The benchmark's normal comparison is fixed on purpose:
 #   1. SEAL baseline
 #   2. OpenFHE baseline pinned to one OpenMP thread
-#   3. OpenFHE using six OpenMP threads
+#   3. OpenFHE using four and six OpenMP threads
 # Keep this separate from thread scaling so routine SEAL-vs-OpenFHE reports do
 # not expand into many OpenFHE-only files.
 SUITES = {
@@ -287,6 +305,11 @@ SUITES = {
         "library": "openfhe",
         "threads": 1,
         "output": "openfhe.csv",
+    },
+    "openfhe4": {
+        "library": "openfhe",
+        "threads": 4,
+        "output": "openfhe_threads4.csv",
     },
     "openfhe6": {
         "library": "openfhe",
@@ -380,7 +403,7 @@ def expand_suites(value: str, suite_map: dict[str, dict[str, object]]) -> list[s
 
 def filter_suites_for_kind(suites: list[str], kind: str) -> list[str]:
     if kind == "serialization":
-        return [suite for suite in suites if suite != "openfhe6"]
+        return [suite for suite in suites if suite not in {"openfhe4", "openfhe6"}]
     return suites
 
 
@@ -397,9 +420,9 @@ def available_tests_for(kind: str, scheme: str) -> dict[str, str]:
         return MATRIX_TESTS
     if kind in {"ntt", "poly"}:
         return TESTS
-    if kind == "workload" and scheme == "ckks":
+    if kind in {"workload", "e2e"} and scheme == "ckks":
         return CKKS_WORKLOAD_TESTS
-    if kind == "workload":
+    if kind in {"workload", "e2e"}:
         return WORKLOAD_TESTS
     if kind == "depth" and scheme == "ckks":
         return CKKS_DEPTH_TESTS
@@ -412,8 +435,36 @@ def available_tests_for(kind: str, scheme: str) -> dict[str, str]:
     return TESTS
 
 
-def build_command(binary: Path, corpus: Path, ring_size: int, max_depth: int) -> list[str]:
-    return [
+def parse_positive_int_list(value: str, option_name: str) -> list[int]:
+    parsed: list[int] = []
+    for raw_item in value.split(","):
+        item = raw_item.strip()
+        if not item:
+            continue
+        try:
+            number = int(item)
+        except ValueError as error:
+            raise ValueError(f"invalid value for {option_name}: {item}") from error
+        if number <= 0:
+            raise ValueError(f"{option_name} values must be positive: {item}")
+        parsed.append(number)
+    if not parsed:
+        raise ValueError(f"{option_name} must contain at least one value")
+    return parsed
+
+
+def build_command(
+    binary: Path,
+    corpus: Path,
+    ring_size: int,
+    max_depth: int,
+    scheme: str,
+    ckks_config: str,
+    ckks_depth: int | None,
+    ckks_scale_bits: int | None,
+    ckks_first_mod_bits: int | None,
+) -> list[str]:
+    command = [
         str(binary),
         "--corpus",
         str(corpus),
@@ -422,6 +473,15 @@ def build_command(binary: Path, corpus: Path, ring_size: int, max_depth: int) ->
         "--max-depth",
         str(max_depth),
     ]
+    if scheme == "ckks":
+        command.extend(["--ckks-config", ckks_config])
+        if ckks_depth is not None:
+            command.extend(["--ckks-depth", str(ckks_depth)])
+        if ckks_scale_bits is not None:
+            command.extend(["--ckks-scale-bits", str(ckks_scale_bits)])
+        if ckks_first_mod_bits is not None:
+            command.extend(["--ckks-first-mod-bits", str(ckks_first_mod_bits)])
+    return command
 
 
 def build_env(library: str, threads: int) -> dict[str, str]:
@@ -491,6 +551,7 @@ def parse_args() -> argparse.Namespace:
             "serialization",
             "depth",
             "workload",
+            "e2e",
             "memory",
             "ntt",
             "poly",
@@ -514,7 +575,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--only",
         default="all",
-        help="debug filter: seal,openfhe,openfhe6,all; with --thread-scaling: openfhe1,openfhe2,openfhe4,openfhe6,openfhe8,all",
+        help="debug filter: seal,openfhe,openfhe4,openfhe6,all; with --thread-scaling: openfhe1,openfhe2,openfhe4,openfhe6,openfhe8,all",
     )
     parser.add_argument(
         "--thread-scaling",
@@ -528,10 +589,39 @@ def parse_args() -> argparse.Namespace:
         help="ring/poly modulus degree passed to benchmark binaries",
     )
     parser.add_argument(
+        "--ring-sizes",
+        default="",
+        help="comma-separated ring/poly modulus degrees to run, e.g. 2048,4096,8192,16384",
+    )
+    parser.add_argument(
         "--max-depth",
         type=int,
         default=4,
         help="maximum multiplicative depth for --kind depth",
+    )
+    parser.add_argument(
+        "--ckks-config",
+        choices=["default", "ring-sweep"],
+        default="default",
+        help="CKKS parameter profile; ring-sweep uses explicit low-depth params for ring-size sweeps",
+    )
+    parser.add_argument(
+        "--ckks-depth",
+        type=int,
+        default=None,
+        help="override CKKS multiplicative depth for CKKS binaries",
+    )
+    parser.add_argument(
+        "--ckks-scale-bits",
+        type=int,
+        default=None,
+        help="override CKKS scale/modulus limb bits for CKKS binaries",
+    )
+    parser.add_argument(
+        "--ckks-first-mod-bits",
+        type=int,
+        default=None,
+        help="override CKKS first/special modulus bits for CKKS binaries",
     )
     parser.add_argument(
         "--build-dir",
@@ -586,11 +676,27 @@ def main() -> int:
             print(f"{name}: {corpus}")
         return 0
 
+    try:
+        ring_sizes = parse_positive_int_list(args.ring_sizes, "--ring-sizes") if args.ring_sizes else [args.ring_size]
+    except ValueError as error:
+        print(error, file=sys.stderr)
+        return 2
     if args.ring_size <= 0:
         print("--ring-size must be positive", file=sys.stderr)
         return 2
     if args.max_depth <= 0:
         print("--max-depth must be positive", file=sys.stderr)
+        return 2
+    for option_name in ("ckks_depth", "ckks_scale_bits", "ckks_first_mod_bits"):
+        value = getattr(args, option_name)
+        if value is not None and value <= 0:
+            print(f"--{option_name.replace('_', '-')} must be positive", file=sys.stderr)
+            return 2
+    if args.scheme != "ckks" and args.ckks_config != "default":
+        print("--ckks-config can only be used with --scheme ckks", file=sys.stderr)
+        return 2
+    if args.scheme != "ckks" and any(getattr(args, name) is not None for name in ("ckks_depth", "ckks_scale_bits", "ckks_first_mod_bits")):
+        print("CKKS parameter overrides can only be used with --scheme ckks", file=sys.stderr)
         return 2
     if args.warmups < 0:
         print("--warmups must be zero or positive", file=sys.stderr)
@@ -630,13 +736,8 @@ def main() -> int:
 
             binary_name = LIBRARIES[args.kind][args.scheme][str(library)]
             binary = build_dir / binary_name
-            command = build_command(binary, corpus, args.ring_size, args.max_depth)
 
-            if args.dry_run:
-                print(env_prefix(str(library), threads) + " ".join(command))
-                continue
-
-            if not binary.exists():
+            if not binary.exists() and not args.dry_run:
                 print(f"missing binary for {library}: {binary}", file=sys.stderr)
                 print("build it with: cmake --build cpp/build --target " + binary_name, file=sys.stderr)
                 return 2
@@ -645,61 +746,78 @@ def main() -> int:
             # with different thread counts do not share runtime state.
             env = build_env(str(library), threads)
 
-            for warmup_index in range(args.warmups):
-                completed = subprocess.run(
-                    command,
-                    cwd=ROOT,
-                    env=env,
-                    text=True,
-                    stdout=subprocess.PIPE,
-                    stderr=subprocess.PIPE,
-                    check=False,
+            for ring_size in ring_sizes:
+                command = build_command(
+                    binary,
+                    corpus,
+                    ring_size,
+                    args.max_depth,
+                    args.scheme,
+                    args.ckks_config,
+                    args.ckks_depth,
+                    args.ckks_scale_bits,
+                    args.ckks_first_mod_bits,
                 )
-                if completed.stderr:
-                    print(completed.stderr, file=sys.stderr, end="")
-                if completed.returncode != 0:
-                    if completed.stdout:
-                        print(completed.stdout, file=sys.stderr, end="")
-                    print(
-                        "warmup failed "
-                        f"(warmup={warmup_index + 1}): " + " ".join(command),
-                        file=sys.stderr,
+
+                if args.dry_run:
+                    print(env_prefix(str(library), threads) + " ".join(command))
+                    continue
+
+                for warmup_index in range(args.warmups):
+                    completed = subprocess.run(
+                        command,
+                        cwd=ROOT,
+                        env=env,
+                        text=True,
+                        stdout=subprocess.PIPE,
+                        stderr=subprocess.PIPE,
+                        check=False,
                     )
-                    return completed.returncode
-
-            for repeat_index in range(args.repetitions):
-                # The C++ executable emits one CSV-style line per operation.
-                # Preserve those lines and annotate corpus, thread count, and
-                # repetition in the same format for all reports.
-                started_unix = time.time()
-                started_iso = datetime.fromtimestamp(started_unix, tz=timezone.utc).isoformat()
-                completed = subprocess.run(
-                    command,
-                    cwd=ROOT,
-                    env=env,
-                    text=True,
-                    stdout=subprocess.PIPE,
-                    stderr=subprocess.PIPE,
-                    check=False,
-                )
-                for line in completed.stdout.splitlines():
-                    if line.strip():
-                        output_by_suite[suite_name].append(
-                            f"started_unix={started_unix:.6f},"
-                            f"started_utc={started_iso},"
-                            f"test={test_name},threads={threads},"
-                            f"repeat={repeat_index + 1},{line}"
+                    if completed.stderr:
+                        print(completed.stderr, file=sys.stderr, end="")
+                    if completed.returncode != 0:
+                        if completed.stdout:
+                            print(completed.stdout, file=sys.stderr, end="")
+                        print(
+                            "warmup failed "
+                            f"(warmup={warmup_index + 1}): " + " ".join(command),
+                            file=sys.stderr,
                         )
+                        return completed.returncode
 
-                if completed.stderr:
-                    print(completed.stderr, file=sys.stderr, end="")
-                if completed.returncode != 0:
-                    if completed.stdout:
-                        print(completed.stdout, file=sys.stderr, end="")
-                    if not args.stdout:
-                        write_result_files(output_by_suite, suites, suite_map, args.out_dir, args.kind, args.scheme)
-                    print("command failed: " + " ".join(command), file=sys.stderr)
-                    return completed.returncode
+                for repeat_index in range(args.repetitions):
+                    # The C++ executable emits one CSV-style line per operation.
+                    # Preserve those lines and annotate corpus, thread count, and
+                    # repetition in the same format for all reports.
+                    started_unix = time.time()
+                    started_iso = datetime.fromtimestamp(started_unix, tz=timezone.utc).isoformat()
+                    completed = subprocess.run(
+                        command,
+                        cwd=ROOT,
+                        env=env,
+                        text=True,
+                        stdout=subprocess.PIPE,
+                        stderr=subprocess.PIPE,
+                        check=False,
+                    )
+                    for line in completed.stdout.splitlines():
+                        if line.strip():
+                            output_by_suite[suite_name].append(
+                                f"started_unix={started_unix:.6f},"
+                                f"started_utc={started_iso},"
+                                f"test={test_name},threads={threads},"
+                                f"repeat={repeat_index + 1},{line}"
+                            )
+
+                    if completed.stderr:
+                        print(completed.stderr, file=sys.stderr, end="")
+                    if completed.returncode != 0:
+                        if completed.stdout:
+                            print(completed.stdout, file=sys.stderr, end="")
+                        if not args.stdout:
+                            write_result_files(output_by_suite, suites, suite_map, args.out_dir, args.kind, args.scheme)
+                        print("command failed: " + " ".join(command), file=sys.stderr)
+                        return completed.returncode
 
     if args.dry_run:
         return 0

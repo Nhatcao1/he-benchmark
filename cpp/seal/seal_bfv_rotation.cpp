@@ -16,6 +16,15 @@
 namespace
 {
     constexpr std::uint64_t kPlainModulusBitSize = 20;
+#ifdef HE_BENCHMARK_SEAL_ROTATION_BGV
+    constexpr auto kScheme = seal::scheme_type::bgv;
+    constexpr const char *kSchemeName = "BGV";
+    constexpr const char *kBinaryName = "seal_bgv_rotation";
+#else
+    constexpr auto kScheme = seal::scheme_type::bfv;
+    constexpr const char *kSchemeName = "BFV";
+    constexpr const char *kBinaryName = "seal_bfv_rotation";
+#endif
 
     std::vector<std::uint64_t> encode_rotation_inputs(
         const std::vector<hebench::RotationRow> &rows,
@@ -142,7 +151,7 @@ namespace
 
         std::cout
             << "library=SEAL"
-            << ",scheme=BFV"
+            << ",scheme=" << kSchemeName
             << ",operation=" << operation
             << ",size=" << size
             << ",ring_size=" << ring_size
@@ -184,7 +193,7 @@ int main(int argc, char **argv)
             throw std::runtime_error("corpus has no rows: " + args.corpus_path);
         }
 
-        seal::EncryptionParameters parms(seal::scheme_type::bfv);
+        seal::EncryptionParameters parms(kScheme);
         parms.set_poly_modulus_degree(args.ring_size);
         parms.set_coeff_modulus(seal::CoeffModulus::BFVDefault(args.ring_size));
         parms.set_plain_modulus(seal::PlainModulus::Batching(args.ring_size, kPlainModulusBitSize));
@@ -201,7 +210,7 @@ int main(int argc, char **argv)
         const auto plain_modulus = parms.plain_modulus().value();
         if (rows.size() > slot_count)
         {
-            throw std::runtime_error("corpus row count exceeds SEAL BFV slot count");
+            throw std::runtime_error(std::string("corpus row count exceeds SEAL ") + kSchemeName + " slot count");
         }
 
         seal::KeyGenerator keygen(context);
@@ -261,7 +270,7 @@ int main(int argc, char **argv)
     }
     catch (const std::exception &error)
     {
-        std::cerr << "seal_bfv_rotation failed: " << error.what() << '\n';
+        std::cerr << kBinaryName << " failed: " << error.what() << '\n';
         return 2;
     }
 }

@@ -10,12 +10,13 @@
 #include "seal/seal.h"
 
 #include "benchmark_args.hpp"
+#include "ckks_config.hpp"
 #include "csv_reader.hpp"
 #include "timer.hpp"
 
 namespace
 {
-    constexpr double kScale = static_cast<double>(std::uint64_t{1} << 40);
+    std::string g_ckks_config_extra;
 
     std::vector<double> values_for(
         const std::vector<hebench::CkksRow> &rows,
@@ -118,7 +119,12 @@ namespace
             << ",correct=" << (correct ? "true" : "false")
             << ",latency_ms=" << elapsed_ms
             << ",ops_per_sec=" << ops_per_sec
-            << ",values_per_sec=0"
+            << ",values_per_sec=0";
+        if (!g_ckks_config_extra.empty())
+        {
+            std::cout << ',' << g_ckks_config_extra;
+        }
+        std::cout
             << ",byte_size=" << byte_size
             << ",mb_per_sec=" << mb_per_sec;
         if (!extra.empty())
@@ -149,12 +155,18 @@ int main(int argc, char **argv)
         {
             throw std::runtime_error("corpus has no rows: " + args.corpus_path);
         }
+        const auto ckks_config = hebench::ckks_config_for(args, 2, 40);
+        g_ckks_config_extra = hebench::ckks_config_extra(ckks_config);
 
         seal::EncryptionParameters parms(seal::scheme_type::ckks);
         parms.set_poly_modulus_degree(args.ring_size);
-        parms.set_coeff_modulus(seal::CoeffModulus::Create(args.ring_size, {60, 40, 40, 60}));
+        parms.set_coeff_modulus(seal::CoeffModulus::Create(
+            args.ring_size, hebench::seal_ckks_coeff_modulus_bits(ckks_config)));
 
-        seal::SEALContext context(parms);
+        seal::SEALContext context(
+            parms,
+            true,
+            ckks_config.relaxed_security ? seal::sec_level_type::none : seal::sec_level_type::tc128);
         if (!context.parameters_set())
         {
             throw std::runtime_error(context.parameter_error_message());
@@ -180,7 +192,7 @@ int main(int argc, char **argv)
         seal::Decryptor decryptor(context, secret_key);
 
         seal::Plaintext plain_a;
-        encoder.encode(values_for(rows, false, slot_count), kScale, plain_a);
+        encoder.encode(values_for(rows, false, slot_count), hebench::ckks_scale(ckks_config), plain_a);
 
         seal::Ciphertext encrypted_a;
         encryptor.encrypt(plain_a, encrypted_a);
