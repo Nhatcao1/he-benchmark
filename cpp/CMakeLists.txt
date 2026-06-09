@@ -117,6 +117,12 @@ target_link_libraries(seal_ckks_keyswitch PRIVATE he_benchmark_common SEAL::seal
 add_executable(seal_ckks_matrix seal/seal_ckks_matrix.cpp)
 target_link_libraries(seal_ckks_matrix PRIVATE he_benchmark_common SEAL::seal)
 
+add_executable(seal_bfv_throughput seal/seal_bfv_throughput.cpp)
+target_link_libraries(seal_bfv_throughput PRIVATE he_benchmark_common SEAL::seal)
+
+add_executable(seal_ckks_throughput seal/seal_ckks_throughput.cpp)
+target_link_libraries(seal_ckks_throughput PRIVATE he_benchmark_common SEAL::seal)
+
 foreach(resource_mode IN ITEMS heap footprint corpus_memory thread_memory cpu)
     string(TOUPPER "${resource_mode}" resource_mode_upper)
     add_executable(seal_bfv_${resource_mode} seal/seal_resource.cpp)
@@ -579,6 +585,8 @@ if(HE_BENCHMARK_BUILD_OPENFHE)
     add_openfhe_benchmark(openfhe_bfv_e2e openfhe/openfhe_exact_e2e.cpp)
     add_openfhe_benchmark(openfhe_bgv_e2e openfhe/openfhe_exact_e2e.cpp HE_BENCHMARK_OPENFHE_E2E_BGV)
     add_openfhe_benchmark(openfhe_ckks_e2e openfhe/openfhe_ckks_e2e.cpp)
+    add_openfhe_benchmark(openfhe_bfv_throughput openfhe/openfhe_bfv_throughput.cpp)
+    add_openfhe_benchmark(openfhe_ckks_throughput openfhe/openfhe_ckks_throughput.cpp)
 
     foreach(resource_mode IN ITEMS heap footprint corpus_memory thread_memory cpu)
         string(TOUPPER "${resource_mode}" resource_mode_upper)

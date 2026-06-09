@@ -11,6 +11,7 @@ namespace hebench
         std::string corpus_path = "he_corpus/exact/exact_safe_000008.csv";
         std::size_t ring_size = 8192;
         std::size_t max_depth = 4;
+        std::size_t duration_ms = 5000;
         std::string ckks_config = "default";
         std::size_t ckks_depth = 0;
         std::size_t ckks_scale_bits = 0;
@@ -76,6 +77,15 @@ namespace hebench
                 args.max_depth = parse_size_arg(argv[i], "--max-depth");
                 continue;
             }
+            if (option == "--duration-ms")
+            {
+                if (++i >= argc)
+                {
+                    throw std::runtime_error("missing value for --duration-ms");
+                }
+                args.duration_ms = parse_size_arg(argv[i], "--duration-ms");
+                continue;
+            }
             if (option == "--ckks-config")
             {
                 if (++i >= argc)
@@ -128,6 +138,7 @@ namespace hebench
     {
         return "Usage: " + program_name +
             " [--corpus he_corpus/exact/exact_safe_000008.csv] [--ring-size 8192] [--max-depth 4]"
+            " [--duration-ms 5000]"
             " [--ckks-config default|ring-sweep] [--ckks-depth N]"
             " [--ckks-scale-bits N] [--ckks-first-mod-bits N]\n";
     }

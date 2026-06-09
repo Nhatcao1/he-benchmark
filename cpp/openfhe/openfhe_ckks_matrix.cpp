@@ -9,11 +9,14 @@
 #include "openfhe.h"
 
 #include "benchmark_args.hpp"
+#include "ckks_config.hpp"
 #include "csv_reader.hpp"
 #include "timer.hpp"
 
 namespace
 {
+    std::string g_ckks_config_extra;
+
     std::string sibling_matrix_path(const std::string &matrix_a_path, const std::string &filename)
     {
         const auto slash = matrix_a_path.find_last_of("/\\");
@@ -74,7 +77,12 @@ namespace
             << ",correct=" << (correct ? "true" : "false")
             << ",latency_ms=" << elapsed_ms
             << ",ops_per_sec=" << ops_per_sec
-            << ",values_per_sec=" << values_per_sec
+            << ",values_per_sec=" << values_per_sec;
+        if (!g_ckks_config_extra.empty())
+        {
+            std::cout << ',' << g_ckks_config_extra;
+        }
+        std::cout
             << ",matrix_dim=" << dimension
             << ",cells=" << cells
             << ",rotations_per_cell=" << rotation_steps(dimension).size()
@@ -111,9 +119,15 @@ int main(int argc, char **argv)
         }
 
         lbcrypto::CCParams<lbcrypto::CryptoContextCKKSRNS> parameters;
-        parameters.SetMultiplicativeDepth(2);
-        parameters.SetScalingModSize(50);
-        parameters.SetFirstModSize(60);
+        const auto ckks_config = hebench::ckks_config_for(args, 2, 40, 60);
+        g_ckks_config_extra = hebench::ckks_config_extra(ckks_config);
+        parameters.SetMultiplicativeDepth(static_cast<std::uint32_t>(ckks_config.multiplicative_depth));
+        parameters.SetScalingModSize(static_cast<std::uint32_t>(ckks_config.scale_bits));
+        parameters.SetFirstModSize(static_cast<std::uint32_t>(ckks_config.first_mod_bits));
+        if (ckks_config.relaxed_security)
+        {
+            parameters.SetSecurityLevel(lbcrypto::HEStd_NotSet);
+        }
         parameters.SetRingDim(static_cast<std::uint32_t>(args.ring_size));
         parameters.SetBatchSize(static_cast<std::uint32_t>(args.ring_size / 2));
         auto crypto_context = lbcrypto::GenCryptoContext(parameters);

@@ -153,6 +153,21 @@ Run request/response end-to-end workloads:
 ./run_benchmarks.py --kind e2e --scheme ckks --tests normal8192 --ring-size 16384 --ckks-config ring-sweep --out-dir cpp/results/e2e_ckks_full16384
 ```
 
+Run sustained throughput benchmarks:
+
+```bash
+./run_benchmarks.py --kind throughput --scheme bfv --tests 256,medium --ring-sizes 8192,16384 --duration-ms 5000 --out-dir cpp/results/throughput_bfv_common
+./run_benchmarks.py --kind throughput --scheme bfv --tests full8192 --ring-size 8192 --duration-ms 5000 --out-dir cpp/results/throughput_bfv8192
+./run_benchmarks.py --kind throughput --scheme bfv --tests full16384 --ring-size 16384 --duration-ms 5000 --out-dir cpp/results/throughput_bfv16384
+./run_benchmarks.py --kind throughput --scheme ckks --tests 256,medium --ring-sizes 8192,16384 --ckks-config ring-sweep --duration-ms 5000 --out-dir cpp/results/throughput_ckks_common
+./run_benchmarks.py --kind throughput --scheme ckks --tests full8192 --ring-size 8192 --ckks-config ring-sweep --duration-ms 5000 --out-dir cpp/results/throughput_ckks8192
+./run_benchmarks.py --kind throughput --scheme ckks --tests full16384 --ring-size 16384 --ckks-config ring-sweep --duration-ms 5000 --out-dir cpp/results/throughput_ckks16384
+```
+
+Keep `full8192` paired with `--ring-size 8192` and `full16384` paired with
+`--ring-size 16384`. The runner forms every test/ring pair, so do not combine
+both full corpus names with `--ring-sizes 8192,16384` in a single command.
+
 Run memory benchmarks:
 
 ```bash

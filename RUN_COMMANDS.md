@@ -9,7 +9,8 @@ benchmarking is implemented for BFV, BGV, and CKKS with `--kind depth`.
 End-to-end dot-product workload benchmarking is implemented with
 `--kind workload`. Request/response end-to-end sum and plaintext-weighted dot
 product benchmarking is implemented with `--kind e2e`. Memory benchmarking is
-implemented with `--kind memory`:
+implemented with `--kind memory`. Sustained packed-operation throughput is
+implemented separately with `--kind throughput`:
 
 ```text
 SEAL baseline
@@ -73,6 +74,25 @@ Run CKKS ring-size scaling with an explicit shared config:
 ```
 
 Rows include `ckks_config=ring-sweep`, `ckks_depth`, `scale_bits`, `first_mod_bits`, and `security=not_set`. Keep corpus size below `ring_size / 2`; `quick8` and `normal256` are safe starting points for small-ring sweeps.
+
+Sustained throughput runner commands:
+
+```bash
+./run_benchmarks.py --kind throughput --scheme bfv --tests 256,medium --ring-sizes 8192,16384 --duration-ms 5000 --out-dir cpp/results/throughput_bfv_common
+./run_benchmarks.py --kind throughput --scheme bfv --tests full8192 --ring-size 8192 --duration-ms 5000 --out-dir cpp/results/throughput_bfv8192
+./run_benchmarks.py --kind throughput --scheme bfv --tests full16384 --ring-size 16384 --duration-ms 5000 --out-dir cpp/results/throughput_bfv16384
+./run_benchmarks.py --kind throughput --scheme ckks --tests 256,medium --ring-sizes 8192,16384 --ckks-config ring-sweep --duration-ms 5000 --out-dir cpp/results/throughput_ckks_common
+./run_benchmarks.py --kind throughput --scheme ckks --tests full8192 --ring-size 8192 --ckks-config ring-sweep --duration-ms 5000 --out-dir cpp/results/throughput_ckks8192
+./run_benchmarks.py --kind throughput --scheme ckks --tests full16384 --ring-size 16384 --ckks-config ring-sweep --duration-ms 5000 --out-dir cpp/results/throughput_ckks16384
+```
+
+Do not combine `--tests full8192,full16384` with `--ring-sizes 8192,16384` in
+one command, because the runner intentionally forms every test/ring pair. Keep
+the full-slot corpus paired with its matching ring. BFV `full8192` means 8192
+active batching slots at ring 8192; CKKS `full8192` means 4096 active CKKS slots
+at ring 8192 because CKKS slot capacity is `ring_size / 2`.
+Use `256,medium` with `--ring-sizes 8192,16384` for same-corpus cross-ring
+throughput comparisons, then run full-slot commands separately.
 
 Rotation runner command:
 
@@ -213,13 +233,14 @@ cmake --build cpp/build -j"$(nproc)"
 | Serialization keys | Serialize and deserialize keys | BFV, BGV, CKKS | Implemented | Reports secret/public key serialize+deserialize; relin/rotation key serialization rows; SEAL also reports relin/rotation key deserialize rows |
 | End-to-end dot product | Encode/encrypt two vectors, multiply, rotate-sum, decrypt scalar | BFV, BGV, CKKS | Implemented | Run `./run_benchmarks.py --kind workload --scheme bfv --tests quick8 --ring-size 8192`; also supports `--scheme bgv` and `--scheme ckks`; reports `operation=dot_product_e2e` |
 | End-to-end sum and plaintext-weighted dot | Encode -> encrypt -> serialize -> deserialize -> server evaluate -> serialize -> deserialize -> decrypt -> decode | BFV, BGV, CKKS | Implemented | Run `./run_benchmarks.py --kind e2e --scheme bfv --tests 256,4096 --ring-sizes 8192,16384`; reports `end_to_end_sum`, `end_to_end_dot_product_pt`, request/response bytes, server latency, peak RSS |
+| Sustained packed throughput | Repeat prepared encrypt, ct-pt multiply, dot-product, and ciphertext serialization loops for a fixed interval | BFV, CKKS | Implemented | Run `./run_benchmarks.py --kind throughput --scheme bfv --tests full8192 --ring-size 8192`; reports completed operations, operations/s, packed values/s, active slots, slot utilization |
 | Peak memory | Track peak RSS after major phases | BFV, BGV, CKKS | Implemented | Run `./run_benchmarks.py --kind memory --scheme bfv --tests quick8 --ring-size 8192`; also supports `--scheme bgv` and `--scheme ckks`; reports `peak_rss_kb` and `delta_peak_rss_kb` |
 | SIMD packing efficiency | Vary used slot count | BFV, BGV, CKKS | Implemented for BFV/BGV exact and CKKS approximate | Compare `values_per_sec` across corpus sizes; CKKS 8192-row files require `--ring-size 16384` |
 | Thread scaling | Run same workload with multiple thread counts | BFV, BGV, CKKS | Implemented as a separate OpenFHE-only suite for exact, rotation, depth, workload, and memory runners | Use `--thread-scaling`; compares OpenFHE `OMP_NUM_THREADS=1,2,4,6,8` outputs |
 | Primitive NTT / INTT | Forward and inverse transform | Low-level kernel | Implemented | Run `./run_benchmarks.py --kind ntt --scheme lowlevel --tests quick8 --ring-size 8192`; SEAL uses `seal::util`; OpenFHE uses polynomial format switching |
 | Primitive polynomial arithmetic | Low-level add, dyadic multiply, shift / DCRT operations | Low-level kernel | Implemented | Run `./run_benchmarks.py --kind poly --scheme lowlevel --tests quick8 --ring-size 8192` |
 | Key switching | Switch ciphertext to compatible key representation | BFV, BGV, CKKS | Implemented for OpenFHE; SEAL emits explicit unsupported rows | Run `./run_benchmarks.py --kind keyswitch --scheme bfv --tests quick8 --ring-size 8192`; also supports BGV/CKKS |
-| CKKS matrix multiplication | 64 x 64 matrix multiplication | CKKS | Implemented as encrypted-row by plaintext-column CKKS workload | Run `./run_benchmarks.py --kind matrix --scheme ckks --all --ring-size 16384`; uses `he_corpus/matrices/matrix_*_0064x0064.csv` |
+| CKKS matrix multiplication | 64 x 64 matrix multiplication | CKKS | Implemented as encrypted-row by plaintext-column CKKS workload | Run `./run_benchmarks.py --kind matrix --scheme ckks --all --ring-size 16384`; supports `--ckks-config ring-sweep` and reports CKKS config fields |
 | Heap allocation tracing per primitive | Count C++ heap allocations around resource phases | BFV, BGV | Implemented | Run `./run_benchmarks.py --kind heap --scheme bfv --tests quick8 --ring-size 8192`; reports `allocations`, `allocated_bytes`, `peak_live_bytes` |
 | Persistent object memory footprint | Hold context, keys, plaintexts, ciphertexts and report footprint | BFV, BGV | Implemented | Run `./run_benchmarks.py --kind footprint --scheme bfv --tests quick8 --ring-size 8192`; reports object rows and peak RSS |
 | Corpus memory scaling | Hold many ciphertexts in RAM | BFV, BGV | Implemented | Run `./run_benchmarks.py --kind corpus-memory --scheme bfv --tests 256 --ring-size 8192`; `held_ciphertexts` follows corpus row count |

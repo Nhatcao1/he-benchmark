@@ -9,12 +9,13 @@
 #include "seal/seal.h"
 
 #include "benchmark_args.hpp"
+#include "ckks_config.hpp"
 #include "csv_reader.hpp"
 #include "timer.hpp"
 
 namespace
 {
-    constexpr double kScale = static_cast<double>(std::uint64_t{1} << 40);
+    std::string g_ckks_config_extra;
 
     template <typename T>
     std::size_t serialized_size(const T &value)
@@ -86,7 +87,12 @@ namespace
             << ",correct=" << (correct ? "true" : "false")
             << ",latency_ms=" << elapsed_ms
             << ",ops_per_sec=" << ops_per_sec
-            << ",values_per_sec=" << values_per_sec
+            << ",values_per_sec=" << values_per_sec;
+        if (!g_ckks_config_extra.empty())
+        {
+            std::cout << ',' << g_ckks_config_extra;
+        }
+        std::cout
             << ",matrix_dim=" << dimension
             << ",cells=" << cells
             << ",rotations_per_cell=" << rotation_steps(dimension).size()
@@ -124,8 +130,13 @@ int main(int argc, char **argv)
         }
 
         seal::EncryptionParameters parms(seal::scheme_type::ckks);
+        const auto ckks_config = hebench::ckks_config_for(args, 2, 40, 60);
+        g_ckks_config_extra = hebench::ckks_config_extra(ckks_config);
+        const auto scale = hebench::ckks_scale(ckks_config);
+
         parms.set_poly_modulus_degree(args.ring_size);
-        parms.set_coeff_modulus(seal::CoeffModulus::Create(args.ring_size, {60, 40, 40, 60}));
+        parms.set_coeff_modulus(seal::CoeffModulus::Create(
+            args.ring_size, hebench::seal_ckks_coeff_modulus_bits(ckks_config)));
         seal::SEALContext context(parms);
         if (!context.parameters_set())
         {
@@ -155,7 +166,7 @@ int main(int argc, char **argv)
         std::vector<seal::Plaintext> b_columns(64);
         for (std::size_t col = 0; col < 64; ++col)
         {
-            encoder.encode(matrix_col(matrix_b, col, slot_count), kScale, b_columns[col]);
+            encoder.encode(matrix_col(matrix_b, col, slot_count), scale, b_columns[col]);
         }
 
         double sum_square_error = 0.0;
@@ -166,7 +177,7 @@ int main(int argc, char **argv)
         for (std::size_t row = 0; row < 64; ++row)
         {
             seal::Plaintext row_plain;
-            encoder.encode(matrix_row(matrix_a, row, slot_count), kScale, row_plain);
+            encoder.encode(matrix_row(matrix_a, row, slot_count), scale, row_plain);
             seal::Ciphertext encrypted_row;
             encryptor.encrypt(row_plain, encrypted_row);
 

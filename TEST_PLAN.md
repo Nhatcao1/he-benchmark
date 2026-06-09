@@ -13,10 +13,14 @@ run plan.
 - `medium` means 4096 active packed slots.
 - `full` means the largest valid corpus for the selected ring:
   - BFV primitive full: `8192`.
+  - BFV throughput full: `full8192` at ring `8192`, `full16384` at ring
+    `16384`.
   - BFV end-to-end full: `4096` at ring `8192`, `8192` at ring `16384`,
     because the rotate-sum e2e path is limited to one batching row.
   - CKKS full: `normal4096` at ring `8192`, `normal8192` at ring `16384`,
     because CKKS slots are `ring_size / 2`.
+  - CKKS throughput full: `full8192` uses `ckks_normal_004096.csv`, and
+    `full16384` uses `ckks_normal_008192.csv`.
 
 ## Thread Decision
 
@@ -45,6 +49,10 @@ run plan.
 | Packed reduction primitive | `rotate_1` | BFV, CKKS | 8192, 16384 | 256, medium, full | BFV: `rotation_*.csv`; CKKS: `ckks_normal_*.csv` | Rotate by one slot | latency, operations/s, packed values/s | Verify direction and values |
 | Packed reduction primitive | `rotate_8` | BFV, CKKS | 8192, 16384 | 256, medium, full | BFV: `rotation_*.csv`; CKKS: `ckks_normal_*.csv` | Rotate by eight slots | latency, operations/s, packed values/s | Verify direction and values |
 | Data exchange overhead | `serialize_ciphertext` | BFV, CKKS | 8192, 16384 | 256, medium, full | Ciphertext generated from corpus | Serialize and deserialize ciphertext | serialize latency, deserialize latency, bytes, MB/s | Decrypt after round trip |
+| Sustained throughput | `throughput_encrypt` | BFV, CKKS | 8192, 16384 | 256, medium, full | Scheme-specific corpus | Encrypt prepared plaintext vectors continuously for `--duration-ms` | completed operations, operations/s, packed values/s, active slots | BFV exact modulo check; CKKS MAE, RMSE, max error |
+| Sustained throughput | `throughput_mul_ct_pt` | BFV, CKKS | 8192, 16384 | 256, medium, full | Scheme-specific corpus | Multiply one prepared ciphertext by plaintext weights continuously for `--duration-ms` | completed operations, operations/s, packed values/s, active slots | Compare with `a * b` |
+| Sustained throughput | `throughput_dot_product_pt` | BFV, CKKS | 8192, 16384 | 256, medium, full | Scheme-specific corpus | Run encrypted plaintext-weighted dot-product requests continuously for `--duration-ms` | completed requests, requests/s, input values/s | Compare sampled scalar result |
+| Sustained throughput | `throughput_serialize_ciphertext` | BFV, CKKS | 8192, 16384 | 256, medium, full | Ciphertext generated from corpus | Serialize one prepared ciphertext continuously for `--duration-ms` | total serialized bytes, objects/s, MB/s | Deserialize sampled output and decrypt |
 | Setup cost | `keygen` | BFV, CKKS | 8192, 16384 | N/A | No corpus | Generate secret and public keys | latency, serialized secret-key bytes, serialized public-key bytes | Keys remain usable |
 | Setup cost | `relin_keygen` | BFV, CKKS | 8192, 16384 | N/A | No corpus | Generate multiplication evaluation key | latency, serialized bytes | Relin succeeds |
 | Setup cost | `rotation_keygen` | BFV, CKKS | 8192, 16384 | N/A | No corpus | Generate required rotation keys | latency, serialized bytes | Rotations succeed |
@@ -105,6 +113,28 @@ grep -R "correct=false" cpp/results/plan_ckks_serialization
 
 ./run_benchmarks.py --kind serialization --scheme ckks --tests normal8192 --ring-size 16384 --ckks-config ring-sweep --out-dir cpp/results/plan_ckks_serialization_full16384
 grep -R "correct=false" cpp/results/plan_ckks_serialization_full16384
+```
+
+Sustained throughput:
+
+```bash
+./run_benchmarks.py --kind throughput --scheme bfv --tests 256,medium --ring-sizes 8192,16384 --duration-ms 5000 --out-dir cpp/results/plan_bfv_throughput_common
+grep -R "correct=false" cpp/results/plan_bfv_throughput_common
+
+./run_benchmarks.py --kind throughput --scheme bfv --tests full8192 --ring-size 8192 --duration-ms 5000 --out-dir cpp/results/plan_bfv_throughput_full8192
+grep -R "correct=false" cpp/results/plan_bfv_throughput_full8192
+
+./run_benchmarks.py --kind throughput --scheme bfv --tests full16384 --ring-size 16384 --duration-ms 5000 --out-dir cpp/results/plan_bfv_throughput_full16384
+grep -R "correct=false" cpp/results/plan_bfv_throughput_full16384
+
+./run_benchmarks.py --kind throughput --scheme ckks --tests 256,medium --ring-sizes 8192,16384 --ckks-config ring-sweep --duration-ms 5000 --out-dir cpp/results/plan_ckks_throughput_common
+grep -R "correct=false" cpp/results/plan_ckks_throughput_common
+
+./run_benchmarks.py --kind throughput --scheme ckks --tests full8192 --ring-size 8192 --ckks-config ring-sweep --duration-ms 5000 --out-dir cpp/results/plan_ckks_throughput_full8192
+grep -R "correct=false" cpp/results/plan_ckks_throughput_full8192
+
+./run_benchmarks.py --kind throughput --scheme ckks --tests full16384 --ring-size 16384 --ckks-config ring-sweep --duration-ms 5000 --out-dir cpp/results/plan_ckks_throughput_full16384
+grep -R "correct=false" cpp/results/plan_ckks_throughput_full16384
 ```
 
 Key switching:

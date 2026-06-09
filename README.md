@@ -111,6 +111,9 @@ For CKKS ring-size scaling experiments, use the explicit `ring-sweep` config. It
 ./run_benchmarks.py --scheme ckks --tests quick8 --ckks-config ring-sweep --ring-sizes 2048,4096,8192,16384,32768
 ```
 
+The CKKS matrix runner also uses this shared config helper, so matrix rows carry
+the same CKKS parameter fields as primitive, serialization, workload, memory,
+and request/response rows.
 
 Depth targets use `he_corpus/depth/*.csv` and report one `operation=depth_mul`
 row per sequential multiplication level. BFV/BGV depth rows validate exact
@@ -137,6 +140,16 @@ The `--kind e2e` targets implement request/response workflows for
 serialization/deserialization around the simulated client/server boundary and
 report request bytes, response bytes, total latency, server evaluation latency,
 and peak RSS.
+
+The `--kind throughput` targets are separate sustained-run benchmarks for BFV
+and CKKS. They prepare plaintexts, keys, and a base ciphertext before timing,
+then run encrypt, ciphertext-plaintext multiply, plaintext-weighted dot
+product, and ciphertext serialization loops for `--duration-ms` milliseconds.
+Rows report `completed_operations`, `operations_per_sec`,
+`packed_values_per_sec`, `active_slots`, `slot_capacity`, and
+`slot_utilization`; dot-product rows also report request/input-value rates.
+Correctness is checked on sampled outputs after the timed loop so validation
+does not dominate the throughput number.
 
 Memory targets report process peak RSS after each major phase: context setup,
 key generation, relinearization-key generation, rotation-key generation, encode,
@@ -215,7 +228,7 @@ cmake -S cpp -B cpp/build \
   -DCMAKE_PREFIX_PATH=/path/to/openfhe/install
 ```
 
-For a temporary SEAL-only local build, pass
-`-DHE_BENCHMARK_BUILD_OPENFHE=OFF`. If an existing build directory was
-configured before OpenFHE became the default, force the cached option back on
-with `-DHE_BENCHMARK_BUILD_OPENFHE=ON`.
+For local SEAL-only development, pass
+`-DHE_BENCHMARK_BUILD_OPENFHE=OFF` explicitly. If an existing build directory
+was configured before OpenFHE became the default, force the cached option back
+on with `-DHE_BENCHMARK_BUILD_OPENFHE=ON`.

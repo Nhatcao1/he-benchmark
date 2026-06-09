@@ -86,6 +86,7 @@ WORKLOAD_TESTS = {
     "8": "he_corpus/exact/exact_safe_000008.csv",
     "256": "he_corpus/exact/exact_safe_000256.csv",
     "4096": "he_corpus/exact/exact_safe_004096.csv",
+    "8192": "he_corpus/exact/exact_safe_008192.csv",
 }
 
 CKKS_WORKLOAD_TESTS = {
@@ -94,15 +95,41 @@ CKKS_WORKLOAD_TESTS = {
     "normal8": "he_corpus/ckks_normal/ckks_normal_000008.csv",
     "normal256": "he_corpus/ckks_normal/ckks_normal_000256.csv",
     "normal4096": "he_corpus/ckks_normal/ckks_normal_004096.csv",
+    "normal8192": "he_corpus/ckks_normal/ckks_normal_008192.csv",
     "small8": "he_corpus/ckks_small/ckks_small_000008.csv",
     "small256": "he_corpus/ckks_small/ckks_small_000256.csv",
     "small4096": "he_corpus/ckks_small/ckks_small_004096.csv",
+    "small8192": "he_corpus/ckks_small/ckks_small_008192.csv",
     "nearzero8": "he_corpus/ckks_near_zero/ckks_near_zero_000008.csv",
     "nearzero256": "he_corpus/ckks_near_zero/ckks_near_zero_000256.csv",
     "nearzero4096": "he_corpus/ckks_near_zero/ckks_near_zero_004096.csv",
+    "nearzero8192": "he_corpus/ckks_near_zero/ckks_near_zero_008192.csv",
     "mixed8": "he_corpus/ckks_mixed_scale/ckks_mixed_scale_000008.csv",
     "mixed256": "he_corpus/ckks_mixed_scale/ckks_mixed_scale_000256.csv",
     "mixed4096": "he_corpus/ckks_mixed_scale/ckks_mixed_scale_004096.csv",
+    "mixed8192": "he_corpus/ckks_mixed_scale/ckks_mixed_scale_008192.csv",
+}
+
+THROUGHPUT_EXACT_TESTS = {
+    "quick8": "he_corpus/exact/exact_safe_000008.csv",
+    "smoke": "he_corpus/exact/exact_safe_000008.csv",
+    "256": "he_corpus/exact/exact_safe_000256.csv",
+    "medium": "he_corpus/exact/exact_safe_004096.csv",
+    "4096": "he_corpus/exact/exact_safe_004096.csv",
+    "full8192": "he_corpus/exact/exact_safe_008192.csv",
+    "full16384": "he_corpus/exact/exact_safe_016384.csv",
+}
+
+THROUGHPUT_CKKS_TESTS = {
+    "quick8": "he_corpus/ckks_normal/ckks_normal_000008.csv",
+    "smoke": "he_corpus/ckks_normal/ckks_normal_000008.csv",
+    "256": "he_corpus/ckks_normal/ckks_normal_000256.csv",
+    "normal256": "he_corpus/ckks_normal/ckks_normal_000256.csv",
+    "medium": "he_corpus/ckks_normal/ckks_normal_004096.csv",
+    "4096": "he_corpus/ckks_normal/ckks_normal_004096.csv",
+    "normal4096": "he_corpus/ckks_normal/ckks_normal_004096.csv",
+    "full8192": "he_corpus/ckks_normal/ckks_normal_004096.csv",
+    "full16384": "he_corpus/ckks_normal/ckks_normal_008192.csv",
 }
 
 MATRIX_TESTS = {
@@ -237,6 +264,16 @@ LIBRARIES = {
             "openfhe": "openfhe_ckks_matrix",
         },
     },
+    "throughput": {
+        "bfv": {
+            "seal": "seal_bfv_throughput",
+            "openfhe": "openfhe_bfv_throughput",
+        },
+        "ckks": {
+            "seal": "seal_ckks_throughput",
+            "openfhe": "openfhe_ckks_throughput",
+        },
+    },
     "heap": {
         "bfv": {
             "seal": "seal_bfv_heap",
@@ -360,6 +397,8 @@ def expand_tests(
     if run_all or value.lower() == "all":
         if "matrix64" in available_tests:
             return ["matrix64"]
+        if "full8192" in available_tests:
+            return ["full8192", "full16384"]
         if "normal8" in available_tests:
             return [
                 "quick8",
@@ -418,6 +457,10 @@ def available_schemes_for_kind(kind: str) -> list[str]:
 def available_tests_for(kind: str, scheme: str) -> dict[str, str]:
     if kind == "matrix":
         return MATRIX_TESTS
+    if kind == "throughput" and scheme == "ckks":
+        return THROUGHPUT_CKKS_TESTS
+    if kind == "throughput":
+        return THROUGHPUT_EXACT_TESTS
     if kind in {"ntt", "poly"}:
         return TESTS
     if kind in {"workload", "e2e"} and scheme == "ckks":
@@ -463,6 +506,7 @@ def build_command(
     ckks_depth: int | None,
     ckks_scale_bits: int | None,
     ckks_first_mod_bits: int | None,
+    duration_ms: int,
 ) -> list[str]:
     command = [
         str(binary),
@@ -472,6 +516,8 @@ def build_command(
         str(ring_size),
         "--max-depth",
         str(max_depth),
+        "--duration-ms",
+        str(duration_ms),
     ]
     if scheme == "ckks":
         command.extend(["--ckks-config", ckks_config])
@@ -492,6 +538,29 @@ def build_env(library: str, threads: int) -> dict[str, str]:
         env["OMP_PROC_BIND"] = "close"
         env["OMP_PLACES"] = "cores"
     return env
+
+
+def expected_throughput_ring(test_name: str) -> int | None:
+    if test_name == "full8192":
+        return 8192
+    if test_name == "full16384":
+        return 16384
+    return None
+
+
+def workload_active_slots(test_name: str) -> int | None:
+    suffixes = (
+        ("8192", 8192),
+        ("4096", 4096),
+        ("256", 256),
+        ("8", 8),
+    )
+    if test_name in {"quick8", "smoke"}:
+        return 8
+    for suffix, slots in suffixes:
+        if test_name.endswith(suffix):
+            return slots
+    return None
 
 
 def env_prefix(library: str, threads: int) -> str:
@@ -557,6 +626,7 @@ def parse_args() -> argparse.Namespace:
             "poly",
             "keyswitch",
             "matrix",
+            "throughput",
             "heap",
             "footprint",
             "corpus-memory",
@@ -598,6 +668,12 @@ def parse_args() -> argparse.Namespace:
         type=int,
         default=4,
         help="maximum multiplicative depth for --kind depth",
+    )
+    parser.add_argument(
+        "--duration-ms",
+        type=int,
+        default=5000,
+        help="sustained-run duration for --kind throughput binaries",
     )
     parser.add_argument(
         "--ckks-config",
@@ -687,6 +763,9 @@ def main() -> int:
     if args.max_depth <= 0:
         print("--max-depth must be positive", file=sys.stderr)
         return 2
+    if args.duration_ms <= 0:
+        print("--duration-ms must be positive", file=sys.stderr)
+        return 2
     for option_name in ("ckks_depth", "ckks_scale_bits", "ckks_first_mod_bits"):
         value = getattr(args, option_name)
         if value is not None and value <= 0:
@@ -714,11 +793,41 @@ def main() -> int:
         if args.scheme not in available_schemes_for_kind(args.kind):
             supported = ", ".join(available_schemes_for_kind(args.kind))
             raise ValueError(f"scheme '{args.scheme}' is not available for kind '{args.kind}'; supported: {supported}")
-        tests = expand_tests(args.tests, args.all, available_tests, args.scheme == "ckks")
+        slot_limited_all = args.scheme == "ckks" or args.kind in {"workload", "e2e"}
+        tests = expand_tests(args.tests, args.all, available_tests, slot_limited_all)
         suites = filter_suites_for_kind(expand_suites(args.only, suite_map), args.kind)
     except ValueError as error:
         print(error, file=sys.stderr)
         return 2
+
+    if args.kind == "throughput":
+        for test_name in tests:
+            expected_ring = expected_throughput_ring(test_name)
+            if expected_ring is None:
+                continue
+            for ring_size in ring_sizes:
+                if ring_size != expected_ring:
+                    print(
+                        f"throughput test '{test_name}' must be paired with --ring-size {expected_ring}; "
+                        f"got {ring_size}",
+                        file=sys.stderr,
+                    )
+                    return 2
+
+    if args.kind in {"workload", "e2e"}:
+        for test_name in tests:
+            active_slots = workload_active_slots(test_name)
+            if active_slots is None:
+                continue
+            for ring_size in ring_sizes:
+                slot_budget = ring_size // 2
+                if active_slots > slot_budget:
+                    print(
+                        f"{args.kind} test '{test_name}' uses {active_slots} active slots, "
+                        f"but --ring-size {ring_size} only supports {slot_budget} for this workload",
+                        file=sys.stderr,
+                    )
+                    return 2
 
     build_dir = ROOT / args.build_dir
     output_by_suite: dict[str, list[str]] = {suite_name: [] for suite_name in suites}
@@ -757,6 +866,7 @@ def main() -> int:
                     args.ckks_depth,
                     args.ckks_scale_bits,
                     args.ckks_first_mod_bits,
+                    args.duration_ms,
                 )
 
                 if args.dry_run:

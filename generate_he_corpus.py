@@ -61,6 +61,7 @@ he_corpus/
     exact_safe_000256.csv
     exact_safe_004096.csv
     exact_safe_008192.csv
+    exact_safe_016384.csv
     exact_edge_cases.csv
 
   rotation/
@@ -172,6 +173,11 @@ ROOT_SEED = 42
 # Common packed-vector sizes for smoke tests, moderate tests, and larger SIMD
 # tests. Actual usable slot capacity still depends on the chosen HE parameters.
 VECTOR_SIZES = [8, 256, 4096, 8192]
+
+# Extra exact-size corpus used by sustained throughput tests. Keep this
+# separate from VECTOR_SIZES so existing primitive/depth/rotation corpus scope
+# does not silently expand.
+THROUGHPUT_EXACT_VECTOR_SIZES = [16384]
 
 # Exact arithmetic range chosen to avoid accidental wraparound for common
 # plaintext moduli during basic tests.
@@ -813,6 +819,7 @@ def generate_manifest(generated_files: list[tuple[Path, str, int | None]]) -> Pa
         "float_dtype": "float64",
         "signed_decode_rule": "canonical-centered-modulo",
         "vector_sizes": VECTOR_SIZES,
+        "throughput_exact_vector_sizes": THROUGHPUT_EXACT_VECTOR_SIZES,
         "max_depth": MAX_DEPTH,
         "exact_safe_integer_range": [
             INTEGER_SAFE_LOW,
@@ -877,6 +884,11 @@ def main() -> None:
         path = generate_exact_safe_vectors(size)
         generated_files.append((path, "exact_safe", size))
 
+    # Full-slot exact throughput dataset for BFV/BGV ring_size=16384.
+    for size in THROUGHPUT_EXACT_VECTOR_SIZES:
+        path = generate_exact_safe_vectors(size)
+        generated_files.append((path, "exact_safe_throughput", size))
+
     # Human-readable exact edge cases.
     edge_path = generate_exact_edge_cases()
     generated_files.append((edge_path, "exact_edge_cases", len(GENERIC_EXACT_EDGE_VALUES) ** 2))
@@ -928,6 +940,7 @@ def main() -> None:
     print("Recommended first files:")
     print("  BFV/BGV smoke test:      he_corpus/exact/exact_safe_000008.csv")
     print("  BFV/BGV main test:       he_corpus/exact/exact_safe_000256.csv")
+    print("  BFV/BGV throughput full: he_corpus/exact/exact_safe_016384.csv")
     print("  Rotation smoke test:     he_corpus/rotation/rotation_000008.csv")
     print("  CKKS smoke test:         he_corpus/ckks_normal/ckks_normal_000008.csv")
     print("  CKKS accuracy test:      he_corpus/ckks_mixed_scale/ckks_mixed_scale_000256.csv")

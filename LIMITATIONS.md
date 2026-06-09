@@ -111,6 +111,9 @@ SEAL/OpenFHE benchmark suite. It is not a bug log.
   plaintext B columns, with rotate-sum dot products for each 64x64 output cell.
   It is a real CKKS matrix workload, but not ciphertext-ciphertext matrix
   multiplication.
+- CKKS matrix rows use the shared CKKS config helper. Use
+  `--ckks-config ring-sweep` for ring-size comparisons and group matrix results
+  by `ckks_config`, `ckks_depth`, `scale_bits`, and `first_mod_bits`.
 - Heap tracing counts C++ `new`/`delete` activity in the benchmark process.
   `allocated_bytes` and `peak_live_bytes` are the primary fields; some library
   deallocations may not be visible when the compiler/runtime uses unsized
@@ -144,6 +147,25 @@ SEAL/OpenFHE benchmark suite. It is not a bug log.
 - The plaintext-weighted dot product multiplies encrypted `a` by plaintext
   weights `b`, then rotate-sums the packed vector. It is intentionally different
   from the older `--kind workload` ciphertext-ciphertext dot product.
+
+## Sustained Throughput
+
+- `--kind throughput` is not a latency replacement. It measures how many
+  prepared operations complete during a fixed wall-clock interval.
+- The timed loop excludes setup and correctness validation. Context creation,
+  key generation, plaintext encoding, and base ciphertext creation happen before
+  timing starts. Sampled outputs are decrypted and checked after timing stops.
+- BFV throughput uses full batching capacity when the corpus size equals
+  `ring_size`. CKKS throughput uses full capacity when the corpus size equals
+  `ring_size / 2`.
+- Pair full corpus names with the matching ring size: BFV `full8192` with
+  `--ring-size 8192`, BFV `full16384` with `--ring-size 16384`, CKKS
+  `full8192` with `--ring-size 8192`, and CKKS `full16384` with
+  `--ring-size 16384`.
+- Dot-product throughput includes the homomorphic rotate-sum tree in each
+  timed request. Serialization throughput only times repeated ciphertext
+  serialization of one prepared ciphertext and validates one deserialized
+  sample.
 
 ## Memory Measurement
 
