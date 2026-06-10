@@ -130,11 +130,17 @@ Run multiplicative-depth tests:
 ./run_benchmarks.py --kind depth --scheme bfv --tests quick8 --ring-size 8192 --max-depth 4
 ./run_benchmarks.py --kind depth --scheme bgv --tests quick8 --ring-size 8192 --max-depth 4
 ./run_benchmarks.py --kind depth --scheme ckks --tests quick8 --ring-size 16384 --max-depth 4
+./run_benchmarks.py --kind depth --scheme ckks --tests 256,4096 --ring-sizes 8192,16384 --ckks-config ring-sweep --max-depth 4 --out-dir cpp/results/plan_ckks_depth
 ```
 
 Depth runs report the first failed level if the parameter set runs out of
 noise/levels. For this benchmark group, a later `correct=false` row is a
 measured saturation point, not necessarily a setup failure.
+After CKKS depth code changes, rebuild before rerunning server benchmarks:
+
+```bash
+cmake --build cpp/build --target seal_ckks_depth openfhe_ckks_depth -j"$(nproc)"
+```
 
 Run end-to-end dot-product workloads:
 

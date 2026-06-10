@@ -12,15 +12,14 @@
 
 #include "benchmark_args.hpp"
 #include "ckks_compare.hpp"
+#include "ckks_config.hpp"
 #include "csv_reader.hpp"
 #include "depth_compare.hpp"
 #include "timer.hpp"
 
 namespace
 {
-    constexpr int kScaleBits = 30;
-    constexpr int kEndpointBits = 49;
-    const double kScale = std::pow(2.0, kScaleBits);
+    std::string g_ckks_config_extra;
 
     template <typename T>
     std::size_t serialized_size(const T &value)
@@ -28,19 +27,6 @@ namespace
         std::stringstream stream;
         value.save(stream);
         return stream.str().size();
-    }
-
-    std::vector<int> coeff_modulus_bits(std::size_t max_depth)
-    {
-        std::vector<int> bits;
-        bits.reserve(max_depth + 2);
-        bits.push_back(kEndpointBits);
-        for (std::size_t i = 0; i < max_depth; ++i)
-        {
-            bits.push_back(kScaleBits);
-        }
-        bits.push_back(kEndpointBits);
-        return bits;
     }
 
     std::string metrics_extra(const hebench::CkksMetrics &metrics)
@@ -91,6 +77,10 @@ namespace
         if (!extra.empty())
         {
             std::cout << ',' << extra;
+        }
+        if (!g_ckks_config_extra.empty())
+        {
+            std::cout << ',' << g_ckks_config_extra;
         }
         std::cout << '\n';
     }
@@ -151,12 +141,29 @@ int main(int argc, char **argv)
             throw std::runtime_error("corpus has no rows: " + args.corpus_path);
         }
         const auto max_depth = std::min(args.max_depth, corpus_depth_count(rows));
+        auto ckks_config = hebench::ckks_config_for(args, max_depth, 30, 49);
+        if (args.ckks_depth == 0)
+        {
+            // Depth benchmarks are explicitly driven by --max-depth. The shared
+            // ring-sweep profile supplies small-ring security/limb settings,
+            // but should not silently collapse a depth run to one level.
+            ckks_config.multiplicative_depth = max_depth;
+        }
+        if (ckks_config.multiplicative_depth < max_depth)
+        {
+            throw std::runtime_error("--ckks-depth must be >= --max-depth for CKKS depth benchmarks");
+        }
+        g_ckks_config_extra = hebench::ckks_config_extra(ckks_config);
 
         seal::EncryptionParameters parms(seal::scheme_type::ckks);
         parms.set_poly_modulus_degree(args.ring_size);
-        parms.set_coeff_modulus(seal::CoeffModulus::Create(args.ring_size, coeff_modulus_bits(max_depth)));
+        parms.set_coeff_modulus(seal::CoeffModulus::Create(
+            args.ring_size, hebench::seal_ckks_coeff_modulus_bits(ckks_config)));
 
-        seal::SEALContext context(parms);
+        seal::SEALContext context(
+            parms,
+            true,
+            ckks_config.relaxed_security ? seal::sec_level_type::none : seal::sec_level_type::tc128);
         if (!context.parameters_set())
         {
             throw std::runtime_error(context.parameter_error_message());
@@ -182,8 +189,8 @@ int main(int argc, char **argv)
 
         seal::Plaintext plain_a;
         seal::Plaintext plain_b;
-        encoder.encode(values_for(rows, false, slot_count), kScale, plain_a);
-        encoder.encode(values_for(rows, true, slot_count), kScale, plain_b);
+        encoder.encode(values_for(rows, false, slot_count), hebench::ckks_scale(ckks_config), plain_a);
+        encoder.encode(values_for(rows, true, slot_count), hebench::ckks_scale(ckks_config), plain_b);
 
         seal::Ciphertext encrypted_a;
         seal::Ciphertext encrypted_b;
@@ -220,7 +227,6 @@ int main(int argc, char **argv)
                 serialized_size(next),
                 "depth=" + std::to_string(depth) +
                     ",max_depth=" + std::to_string(max_depth) +
-                    ",scale_bits=" + std::to_string(kScaleBits) +
                     ",scale_before=" + std::to_string(scale_before) +
                     ",scale_after=" + std::to_string(next.scale()) +
                     ",level_before=" + std::to_string(level_before) +

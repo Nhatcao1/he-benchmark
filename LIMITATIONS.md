@@ -57,6 +57,9 @@ SEAL/OpenFHE benchmark suite. It is not a bug log.
   errors when expected values are near zero even if absolute error passes.
 - The default CKKS depth runner uses smaller scale bits than the CKKS primitive
   runner so four rescale levels fit in the default `8192` ring.
+- CKKS depth uses `--max-depth` as the tested chain length. `--ckks-config
+  ring-sweep` supplies the shared ring-sweep modulus/security settings but does
+  not reduce the depth chain to the ring-sweep primitive default of one level.
 
 ## OpenFHE Serialization
 

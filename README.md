@@ -120,6 +120,10 @@ row per sequential multiplication level. BFV/BGV depth rows validate exact
 centered-modulo results; CKKS depth rows validate approximate results with the
 same error metrics as the CKKS primitive runner. A later `correct=false` row in
 a depth run can be the measured saturation point for that parameter set.
+CKKS depth uses `--max-depth` as the tested chain length. With
+`--ckks-config ring-sweep`, depth rows keep that chain length while applying
+the shared ring-sweep scale, first-modulus, and `security=not_set` settings so
+OpenFHE can run small rings such as 8192.
 
 Serialization targets cover BFV, BGV, and CKKS. They report save/load latency,
 serialized byte size, and MB/s for ciphertexts, secret keys, public keys,

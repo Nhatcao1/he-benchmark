@@ -11,14 +11,14 @@
 
 #include "benchmark_args.hpp"
 #include "ckks_compare.hpp"
+#include "ckks_config.hpp"
 #include "csv_reader.hpp"
 #include "depth_compare.hpp"
 #include "timer.hpp"
 
 namespace
 {
-    constexpr std::uint32_t kScaleModSize = 30;
-    constexpr std::uint32_t kFirstModSize = 49;
+    std::string g_ckks_config_extra;
 
     std::string metrics_extra(const hebench::CkksMetrics &metrics)
     {
@@ -63,6 +63,10 @@ namespace
         if (!extra.empty())
         {
             std::cout << ',' << extra;
+        }
+        if (!g_ckks_config_extra.empty())
+        {
+            std::cout << ',' << g_ckks_config_extra;
         }
         std::cout << '\n';
     }
@@ -127,11 +131,31 @@ int main(int argc, char **argv)
             throw std::runtime_error("corpus row count exceeds OpenFHE CKKS batch size");
         }
         const auto max_depth = std::min(args.max_depth, corpus_depth_count(rows));
+        auto ckks_config = hebench::ckks_config_for(args, max_depth, 30, 49);
+        if (args.ckks_depth == 0)
+        {
+            // Depth benchmarks are explicitly driven by --max-depth. The shared
+            // ring-sweep profile supplies small-ring security/limb settings,
+            // but should not silently collapse a depth run to one level.
+            ckks_config.multiplicative_depth = max_depth;
+        }
+        if (ckks_config.multiplicative_depth < max_depth)
+        {
+            throw std::runtime_error("--ckks-depth must be >= --max-depth for CKKS depth benchmarks");
+        }
+        g_ckks_config_extra = hebench::ckks_config_extra(ckks_config);
 
         lbcrypto::CCParams<lbcrypto::CryptoContextCKKSRNS> parameters;
-        parameters.SetMultiplicativeDepth(static_cast<std::uint32_t>(max_depth));
-        parameters.SetScalingModSize(kScaleModSize);
-        parameters.SetFirstModSize(kFirstModSize);
+        parameters.SetMultiplicativeDepth(static_cast<std::uint32_t>(ckks_config.multiplicative_depth));
+        parameters.SetScalingModSize(static_cast<std::uint32_t>(ckks_config.scale_bits));
+        if (ckks_config.explicit_first_mod)
+        {
+            parameters.SetFirstModSize(static_cast<std::uint32_t>(ckks_config.first_mod_bits));
+        }
+        if (ckks_config.relaxed_security)
+        {
+            parameters.SetSecurityLevel(lbcrypto::HEStd_NotSet);
+        }
         parameters.SetRingDim(static_cast<std::uint32_t>(args.ring_size));
         parameters.SetBatchSize(static_cast<std::uint32_t>(args.ring_size / 2));
 
@@ -175,7 +199,6 @@ int main(int argc, char **argv)
                 rows.size(),
                 "depth=" + std::to_string(depth) +
                     ",max_depth=" + std::to_string(max_depth) +
-                    ",scale_bits=" + std::to_string(kScaleModSize) +
                     ",scale_before=" + std::to_string(scale_before) +
                     ",scale_after=" + std::to_string(next->GetScalingFactor()) +
                     ",level_before=" + std::to_string(level_before) +

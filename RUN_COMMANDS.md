@@ -115,6 +115,7 @@ Depth runner commands:
 ./run_benchmarks.py --kind depth --scheme bfv --tests quick8 --ring-size 8192 --max-depth 4
 ./run_benchmarks.py --kind depth --scheme bgv --tests quick8 --ring-size 8192 --max-depth 4
 ./run_benchmarks.py --kind depth --scheme ckks --tests quick8 --ring-size 16384 --max-depth 4
+./run_benchmarks.py --kind depth --scheme ckks --tests 256,4096 --ring-sizes 8192,16384 --ckks-config ring-sweep --max-depth 4 --out-dir cpp/results/plan_ckks_depth
 ```
 
 End-to-end dot-product workload commands:
@@ -325,6 +326,9 @@ Depth interpretation:
 Rows use operation=depth_mul and include depth, max_depth, level fields, and
 scheme-specific accuracy/noise fields. A later correct=false row records the
 first failed depth for that parameter set; it is not a runner crash.
+For CKKS ring-size comparisons, use `--ckks-config ring-sweep`; depth runners
+still honor `--max-depth` as the tested chain length and print
+`security=not_set` on each row.
 ```
 
 Run main current comparison:
