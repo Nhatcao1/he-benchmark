@@ -136,10 +136,13 @@ Run multiplicative-depth tests:
 Depth runs report the first failed level if the parameter set runs out of
 noise/levels. For this benchmark group, a later `correct=false` row is a
 measured saturation point, not necessarily a setup failure.
+OpenFHE exact BFV/BGV depth rows print `security=not_set` so ring/depth sweeps
+can run the requested ring instead of failing OpenFHE's automatic HE-standard
+check.
 After CKKS depth code changes, rebuild before rerunning server benchmarks:
 
 ```bash
-cmake --build cpp/build --target seal_ckks_depth openfhe_ckks_depth -j"$(nproc)"
+cmake --build cpp/build --target openfhe_bfv_depth openfhe_bgv_depth seal_ckks_depth openfhe_ckks_depth -j"$(nproc)"
 ```
 
 Run end-to-end dot-product workloads:

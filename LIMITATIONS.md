@@ -55,6 +55,9 @@ SEAL/OpenFHE benchmark suite. It is not a bug log.
 - Exact BFV/BGV rows compare centered plaintext residues modulo the plaintext
   modulus. CKKS rows compare approximate values and can show large relative
   errors when expected values are near zero even if absolute error passes.
+- OpenFHE exact BFV/BGV depth rows use `security=not_set` so the benchmark can
+  measure the caller-selected ring/depth pair. OpenFHE otherwise rejects BFV
+  `ring_size=8192` at `max_depth=4` and asks for `16384`.
 - The default CKKS depth runner uses smaller scale bits than the CKKS primitive
   runner so four rescale levels fit in the default `8192` ring.
 - CKKS depth uses `--max-depth` as the tested chain length. `--ckks-config

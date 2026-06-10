@@ -133,6 +133,11 @@ int main(int argc, char **argv)
 #endif
         parameters.SetPlaintextModulus(kPlainModulus);
         parameters.SetMultiplicativeDepth(static_cast<std::uint32_t>(max_depth));
+        // Depth sweeps intentionally test the caller-selected ring/depth pair.
+        // OpenFHE's BFVRNS security checker requires ring_size=16384 for
+        // depth=4 with this plaintext modulus, so disable the automatic
+        // standard check here and report the setting on every row.
+        parameters.SetSecurityLevel(lbcrypto::HEStd_NotSet);
         parameters.SetRingDim(static_cast<std::uint32_t>(args.ring_size));
         parameters.SetBatchSize(static_cast<std::uint32_t>(args.ring_size));
 
@@ -177,6 +182,7 @@ int main(int argc, char **argv)
                 rows.size(),
                 "depth=" + std::to_string(depth) +
                     ",max_depth=" + std::to_string(max_depth) +
+                    ",security=not_set" +
                     ",level_before=" + std::to_string(level_before) +
                     ",level_after=" + std::to_string(next->GetLevel()) +
                     ",components_after=" + std::to_string(next->NumberCiphertextElements()) +

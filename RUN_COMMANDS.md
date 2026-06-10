@@ -326,6 +326,9 @@ Depth interpretation:
 Rows use operation=depth_mul and include depth, max_depth, level fields, and
 scheme-specific accuracy/noise fields. A later correct=false row records the
 first failed depth for that parameter set; it is not a runner crash.
+OpenFHE exact BFV/BGV depth rows print `security=not_set` because depth sweeps
+must test the requested ring/depth pair instead of letting OpenFHE silently
+upgrade BFV `8192`/depth-4 to `16384`.
 For CKKS ring-size comparisons, use `--ckks-config ring-sweep`; depth runners
 still honor `--max-depth` as the tested chain length and print
 `security=not_set` on each row.
