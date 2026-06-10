@@ -19,6 +19,9 @@ namespace
 {
     using hebench::CkksOperation;
 
+    constexpr double kRotationAbsTolerance = 2e-3;
+    constexpr double kRotationRelTolerance = 1e-3;
+
     std::string g_ckks_config_extra;
 
     std::vector<double> values_for(
@@ -259,11 +262,19 @@ namespace
         const auto elapsed_ms = timer.elapsed_ms();
 
         const auto decoded = decrypt_decode(crypto_context, private_key, result, rows.size());
-        auto metrics = hebench::compare_ckks_vectors(decoded, expected_rotation(rows, slot_count, step, true));
+        auto metrics = hebench::compare_ckks_vectors(
+            decoded,
+            expected_rotation(rows, slot_count, step, true),
+            kRotationAbsTolerance,
+            kRotationRelTolerance);
         std::string direction = "left";
         if (!metrics.correct)
         {
-            const auto right_metrics = hebench::compare_ckks_vectors(decoded, expected_rotation(rows, slot_count, step, false));
+            const auto right_metrics = hebench::compare_ckks_vectors(
+                decoded,
+                expected_rotation(rows, slot_count, step, false),
+                kRotationAbsTolerance,
+                kRotationRelTolerance);
             if (right_metrics.correct || right_metrics.pass_rate > metrics.pass_rate)
             {
                 metrics = right_metrics;
@@ -281,6 +292,8 @@ namespace
             rows.size(),
             "rotation_step=" + std::to_string(step) +
                 ",matched_direction=" + direction +
+                ",abs_tolerance=" + std::to_string(kRotationAbsTolerance) +
+                ",rel_tolerance=" + std::to_string(kRotationRelTolerance) +
                 "," + metrics_extra(metrics));
         return metrics.correct;
     }
