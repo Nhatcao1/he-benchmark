@@ -263,6 +263,14 @@ LIBRARIES = {
         },
     },
     "matrix": {
+        "bfv": {
+            "seal": "seal_bfv_matrix",
+            "openfhe": "openfhe_bfv_matrix",
+        },
+        "bgv": {
+            "seal": "seal_bgv_matrix",
+            "openfhe": "openfhe_bgv_matrix",
+        },
         "ckks": {
             "seal": "seal_ckks_matrix",
             "openfhe": "openfhe_ckks_matrix",
