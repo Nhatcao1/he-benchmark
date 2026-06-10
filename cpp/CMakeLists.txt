@@ -56,6 +56,9 @@ add_executable(seal_bgv_rotation seal/seal_bfv_rotation.cpp)
 target_compile_definitions(seal_bgv_rotation PRIVATE HE_BENCHMARK_SEAL_ROTATION_BGV)
 target_link_libraries(seal_bgv_rotation PRIVATE he_benchmark_common SEAL::seal)
 
+add_executable(seal_ckks_rotation seal/seal_ckks_rotation.cpp)
+target_link_libraries(seal_ckks_rotation PRIVATE he_benchmark_common SEAL::seal)
+
 add_executable(seal_bfv_serialization seal/seal_bfv_serialization.cpp)
 target_link_libraries(seal_bfv_serialization PRIVATE he_benchmark_common SEAL::seal)
 
@@ -582,6 +585,7 @@ if(HE_BENCHMARK_BUILD_OPENFHE)
     add_openfhe_benchmark(openfhe_bgv_keyswitch openfhe/openfhe_keyswitch.cpp HE_BENCHMARK_OPENFHE_KEYSWITCH_BGV)
     add_openfhe_benchmark(openfhe_ckks_keyswitch openfhe/openfhe_keyswitch.cpp HE_BENCHMARK_OPENFHE_KEYSWITCH_CKKS)
     add_openfhe_benchmark(openfhe_ckks_matrix openfhe/openfhe_ckks_matrix.cpp)
+    add_openfhe_benchmark(openfhe_ckks_rotation openfhe/openfhe_ckks_rotation.cpp)
     add_openfhe_benchmark(openfhe_bfv_e2e openfhe/openfhe_exact_e2e.cpp)
     add_openfhe_benchmark(openfhe_bgv_e2e openfhe/openfhe_exact_e2e.cpp HE_BENCHMARK_OPENFHE_E2E_BGV)
     add_openfhe_benchmark(openfhe_ckks_e2e openfhe/openfhe_ckks_e2e.cpp)

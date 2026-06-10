@@ -99,6 +99,8 @@ Rotation runner command:
 ```bash
 ./run_benchmarks.py --kind rotation --all --ring-size 8192
 ./run_benchmarks.py --kind rotation --scheme bgv --all --ring-size 8192
+./run_benchmarks.py --kind rotation --scheme ckks --tests normal256,normal4096 --ring-sizes 8192,16384 --ckks-config ring-sweep --out-dir cpp/results/rotation_ckks
+./run_benchmarks.py --kind rotation --scheme ckks --tests normal8192 --ring-size 16384 --ckks-config ring-sweep --out-dir cpp/results/rotation_ckks_full16384
 ```
 
 Serialization runner command:

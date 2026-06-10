@@ -161,6 +161,10 @@ LIBRARIES = {
             "seal": "seal_bgv_rotation",
             "openfhe": "openfhe_bgv_rotation",
         },
+        "ckks": {
+            "seal": "seal_ckks_rotation",
+            "openfhe": "openfhe_ckks_rotation",
+        },
     },
     "serialization": {
         "bfv": {
@@ -471,6 +475,8 @@ def available_tests_for(kind: str, scheme: str) -> dict[str, str]:
         return CKKS_DEPTH_TESTS
     if kind == "depth":
         return DEPTH_TESTS
+    if kind == "rotation" and scheme == "ckks":
+        return CKKS_WORKLOAD_TESTS
     if scheme == "ckks":
         return CKKS_TESTS
     if kind == "rotation":

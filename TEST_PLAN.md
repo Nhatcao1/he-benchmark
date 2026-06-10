@@ -95,11 +95,14 @@ BFV rotations:
 grep -R "correct=false" cpp/results/plan_bfv_rotation
 ```
 
-CKKS rotation rows are emitted by the CKKS primitive commands above. To isolate
-only rotation rows after the run:
+CKKS rotations:
 
 ```bash
-grep -RE "operation=rotate_1|operation=rotate_8|operation=rotation_keygen" cpp/results/plan_ckks_primitives cpp/results/plan_ckks_primitives_full16384
+./run_benchmarks.py --kind rotation --scheme ckks --tests normal256,normal4096 --ring-sizes 8192,16384 --ckks-config ring-sweep --out-dir cpp/results/plan_ckks_rotation
+grep -R "correct=false" cpp/results/plan_ckks_rotation
+
+./run_benchmarks.py --kind rotation --scheme ckks --tests normal8192 --ring-size 16384 --ckks-config ring-sweep --out-dir cpp/results/plan_ckks_rotation_full16384
+grep -R "correct=false" cpp/results/plan_ckks_rotation_full16384
 ```
 
 Serialization:
