@@ -363,6 +363,7 @@ int main(int argc, char **argv)
         lbcrypto::CCParams<lbcrypto::CryptoContextBGVRNS> parameters;
         parameters.SetPlaintextModulus(kPlainModulus);
         parameters.SetMultiplicativeDepth(kMultiplicativeDepth);
+        parameters.SetSecurityLevel(lbcrypto::HEStd_128_classic);
         parameters.SetRingDim(static_cast<std::uint32_t>(args.ring_size));
         parameters.SetBatchSize(static_cast<std::uint32_t>(args.ring_size));
 

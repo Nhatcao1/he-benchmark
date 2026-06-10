@@ -190,6 +190,10 @@ int main(int argc, char **argv)
         {
             parameters.SetSecurityLevel(lbcrypto::HEStd_NotSet);
         }
+        else
+        {
+            parameters.SetSecurityLevel(lbcrypto::HEStd_128_classic);
+        }
         parameters.SetRingDim(static_cast<std::uint32_t>(args.ring_size));
         parameters.SetBatchSize(static_cast<std::uint32_t>(slot_capacity));
 

@@ -102,6 +102,7 @@ int main(int argc, char **argv)
         parameters.SetMultiplicativeDepth(2);
         parameters.SetScalingModSize(50);
         parameters.SetFirstModSize(60);
+        parameters.SetSecurityLevel(lbcrypto::HEStd_128_classic);
         parameters.SetRingDim(static_cast<std::uint32_t>(args.ring_size));
         parameters.SetBatchSize(static_cast<std::uint32_t>(args.ring_size / 2));
         auto crypto_context = lbcrypto::GenCryptoContext(parameters);
@@ -151,6 +152,7 @@ int main(int argc, char **argv)
 #endif
         parameters.SetPlaintextModulus(kPlainModulus);
         parameters.SetMultiplicativeDepth(2);
+        parameters.SetSecurityLevel(lbcrypto::HEStd_128_classic);
         parameters.SetRingDim(static_cast<std::uint32_t>(args.ring_size));
         parameters.SetBatchSize(static_cast<std::uint32_t>(args.ring_size));
         auto crypto_context = lbcrypto::GenCryptoContext(parameters);
