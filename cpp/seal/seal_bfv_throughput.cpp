@@ -16,7 +16,15 @@ namespace
 {
     constexpr std::uint64_t kPlainModulusBitSize = 20;
     constexpr const char *kLibraryName = "SEAL";
+#ifdef HE_BENCHMARK_SEAL_THROUGHPUT_BGV
+    constexpr const char *kSchemeName = "BGV";
+    constexpr const char *kBinaryName = "seal_bgv_throughput";
+    constexpr seal::scheme_type kSchemeType = seal::scheme_type::bgv;
+#else
     constexpr const char *kSchemeName = "BFV";
+    constexpr const char *kBinaryName = "seal_bfv_throughput";
+    constexpr seal::scheme_type kSchemeType = seal::scheme_type::bfv;
+#endif
 
     std::int64_t centered_mod_wide(__int128 value, std::uint64_t plain_modulus)
     {
@@ -160,7 +168,7 @@ int main(int argc, char **argv)
             throw std::runtime_error("throughput dot product requires a power-of-two row count");
         }
 
-        seal::EncryptionParameters parms(seal::scheme_type::bfv);
+        seal::EncryptionParameters parms(kSchemeType);
         parms.set_poly_modulus_degree(args.ring_size);
         parms.set_coeff_modulus(seal::CoeffModulus::BFVDefault(args.ring_size));
         parms.set_plain_modulus(seal::PlainModulus::Batching(args.ring_size, kPlainModulusBitSize));
@@ -177,7 +185,7 @@ int main(int argc, char **argv)
         const auto plain_modulus = parms.plain_modulus().value();
         if (rows.size() > slot_capacity)
         {
-            throw std::runtime_error("corpus row count exceeds SEAL BFV slot count");
+            throw std::runtime_error("corpus row count exceeds SEAL exact-scheme slot count");
         }
 
         seal::KeyGenerator keygen(context);
@@ -298,7 +306,7 @@ int main(int argc, char **argv)
     }
     catch (const std::exception &error)
     {
-        std::cerr << "seal_bfv_throughput failed: " << error.what() << '\n';
+        std::cerr << kBinaryName << " failed: " << error.what() << '\n';
         return 2;
     }
 }

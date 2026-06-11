@@ -281,6 +281,10 @@ LIBRARIES = {
             "seal": "seal_bfv_throughput",
             "openfhe": "openfhe_bfv_throughput",
         },
+        "bgv": {
+            "seal": "seal_bgv_throughput",
+            "openfhe": "openfhe_bgv_throughput",
+        },
         "ckks": {
             "seal": "seal_ckks_throughput",
             "openfhe": "openfhe_ckks_throughput",

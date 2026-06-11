@@ -9,6 +9,7 @@
 #include "ciphertext-ser.h"
 #include "cryptocontext-ser.h"
 #include "key/key-ser.h"
+#include "scheme/bgvrns/bgvrns-ser.h"
 #include "scheme/bfvrns/bfvrns-ser.h"
 
 #include "benchmark_args.hpp"
@@ -21,7 +22,13 @@ namespace
     constexpr std::uint64_t kPlainModulus = 786433;
     constexpr std::uint32_t kMultiplicativeDepth = 2;
     constexpr const char *kLibraryName = "OpenFHE";
+#ifdef HE_BENCHMARK_OPENFHE_THROUGHPUT_BGV
+    constexpr const char *kSchemeName = "BGV";
+    constexpr const char *kBinaryName = "openfhe_bgv_throughput";
+#else
     constexpr const char *kSchemeName = "BFV";
+    constexpr const char *kBinaryName = "openfhe_bfv_throughput";
+#endif
 
     std::vector<int64_t> encode_values(
         const std::vector<hebench::ExactRow> &rows,
@@ -162,10 +169,14 @@ int main(int argc, char **argv)
         }
         if (rows.size() > args.ring_size)
         {
-            throw std::runtime_error("corpus row count exceeds OpenFHE BFV batch size");
+            throw std::runtime_error("corpus row count exceeds OpenFHE exact-scheme batch size");
         }
 
+#ifdef HE_BENCHMARK_OPENFHE_THROUGHPUT_BGV
+        lbcrypto::CCParams<lbcrypto::CryptoContextBGVRNS> parameters;
+#else
         lbcrypto::CCParams<lbcrypto::CryptoContextBFVRNS> parameters;
+#endif
         parameters.SetPlaintextModulus(kPlainModulus);
         parameters.SetMultiplicativeDepth(kMultiplicativeDepth);
         parameters.SetSecurityLevel(lbcrypto::HEStd_128_classic);
@@ -282,7 +293,7 @@ int main(int argc, char **argv)
     }
     catch (const std::exception &error)
     {
-        std::cerr << "openfhe_bfv_throughput failed: " << error.what() << '\n';
+        std::cerr << kBinaryName << " failed: " << error.what() << '\n';
         return 2;
     }
 }
