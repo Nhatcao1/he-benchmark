@@ -205,8 +205,10 @@ int main(int argc, char **argv)
         seal::KeyGenerator keygen(context);
         const auto secret_key = keygen.secret_key();
         seal::PublicKey public_key;
+        seal::RelinKeys relin_keys;
         seal::GaloisKeys galois_keys;
         keygen.create_public_key(public_key);
+        keygen.create_relin_keys(relin_keys);
         keygen.create_galois_keys(rotation_steps(rows.size()), galois_keys);
 
         seal::Encryptor encryptor(context, public_key);
@@ -219,24 +221,45 @@ int main(int argc, char **argv)
         encoder.encode(values_for(rows, true, slot_count), hebench::ckks_scale(ckks_config), plain_b);
 
         bool all_correct = true;
-        for (const auto operation : {"end_to_end_sum", "end_to_end_dot_product_pt"})
+        for (const auto operation : {"end_to_end_sum", "end_to_end_dot_product_pt", "end_to_end_dot_product_ct"})
         {
-            const bool is_sum = std::string(operation) == "end_to_end_sum";
+            const std::string operation_name = operation;
+            const bool is_sum = operation_name == "end_to_end_sum";
+            const bool is_dot_ct = operation_name == "end_to_end_dot_product_ct";
             const auto expected = is_sum ? expected_sum(rows) : expected_dot(rows);
 
             const hebench::Timer total_timer;
             seal::Ciphertext encrypted_request;
             encryptor.encrypt(plain_a, encrypted_request);
             const auto request_bytes = save_to_string(encrypted_request);
+            std::string request_b_bytes;
+            if (is_dot_ct)
+            {
+                seal::Ciphertext encrypted_request_b;
+                encryptor.encrypt(plain_b, encrypted_request_b);
+                request_b_bytes = save_to_string(encrypted_request_b);
+            }
 
             seal::Ciphertext server_request;
             load_from_string(context, request_bytes, server_request);
+            seal::Ciphertext server_request_b;
+            if (is_dot_ct)
+            {
+                load_from_string(context, request_b_bytes, server_request_b);
+            }
 
             const hebench::Timer server_timer;
             seal::Ciphertext server_result;
             if (is_sum)
             {
                 server_result = rotate_sum(evaluator, galois_keys, server_request, rows.size());
+            }
+            else if (is_dot_ct)
+            {
+                evaluator.multiply(server_request, server_request_b, server_result);
+                evaluator.relinearize_inplace(server_result, relin_keys);
+                evaluator.rescale_to_next_inplace(server_result);
+                server_result = rotate_sum(evaluator, galois_keys, server_result, rows.size());
             }
             else
             {
@@ -268,7 +291,7 @@ int main(int argc, char **argv)
                 correct,
                 total_ms,
                 server_eval_ms,
-                request_bytes.size(),
+                request_bytes.size() + request_b_bytes.size(),
                 response_bytes.size(),
                 rotation_steps(rows.size()).size(),
                 client_response.size(),

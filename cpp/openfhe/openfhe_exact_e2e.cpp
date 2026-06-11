@@ -230,6 +230,7 @@ int main(int argc, char **argv)
         crypto_context->Enable(lbcrypto::ADVANCEDSHE);
 
         auto keys = crypto_context->KeyGen();
+        crypto_context->EvalMultKeyGen(keys.secretKey);
         crypto_context->EvalRotateKeyGen(keys.secretKey, rotation_steps(rows.size()));
 
         auto plain_a = crypto_context->MakePackedPlaintext(
@@ -238,23 +239,41 @@ int main(int argc, char **argv)
             encode_signed_inputs(rows, true, args.ring_size, kPlainModulus));
 
         bool all_correct = true;
-        for (const auto operation : {"end_to_end_sum", "end_to_end_dot_product_pt"})
+        for (const auto operation : {"end_to_end_sum", "end_to_end_dot_product_pt", "end_to_end_dot_product_ct"})
         {
-            const bool is_sum = std::string(operation) == "end_to_end_sum";
+            const std::string operation_name = operation;
+            const bool is_sum = operation_name == "end_to_end_sum";
+            const bool is_dot_ct = operation_name == "end_to_end_dot_product_ct";
             const auto expected = is_sum ? expected_sum(rows, kPlainModulus) : expected_dot(rows, kPlainModulus);
 
             const hebench::Timer total_timer;
             const auto encrypted_request = crypto_context->Encrypt(keys.publicKey, plain_a);
             const auto request_bytes = serialize_to_string(encrypted_request);
+            std::string request_b_bytes;
+            if (is_dot_ct)
+            {
+                const auto encrypted_request_b = crypto_context->Encrypt(keys.publicKey, plain_b);
+                request_b_bytes = serialize_to_string(encrypted_request_b);
+            }
 
             lbcrypto::Ciphertext<lbcrypto::DCRTPoly> server_request;
             deserialize_from_string(request_bytes, server_request);
+            lbcrypto::Ciphertext<lbcrypto::DCRTPoly> server_request_b;
+            if (is_dot_ct)
+            {
+                deserialize_from_string(request_b_bytes, server_request_b);
+            }
 
             const hebench::Timer server_timer;
             lbcrypto::Ciphertext<lbcrypto::DCRTPoly> server_result;
             if (is_sum)
             {
                 server_result = rotate_sum(crypto_context, server_request, rows.size());
+            }
+            else if (is_dot_ct)
+            {
+                server_result = crypto_context->EvalMult(server_request, server_request_b);
+                server_result = rotate_sum(crypto_context, server_result, rows.size());
             }
             else
             {
@@ -282,7 +301,7 @@ int main(int argc, char **argv)
                 correct,
                 total_ms,
                 server_eval_ms,
-                request_bytes.size(),
+                request_bytes.size() + request_b_bytes.size(),
                 response_bytes.size(),
                 rotation_steps(rows.size()).size(),
                 client_response->NumberCiphertextElements(),
